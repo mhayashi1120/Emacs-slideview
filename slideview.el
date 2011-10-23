@@ -32,6 +32,9 @@
 ;; * turbulance mode
 ;; * arc-mode, tar-mode filter by file extension
 ;; * refactor arc-mode, tar-mode
+;; * use view-exit-action
+;; * when directory contains numbered file
+;;   1.xml 10.xml 2.xml
 
 ;;; Commentary:
 ;; 
@@ -41,7 +44,6 @@
 
 (require 'view)
 
-;; todo use view-exit-action
 ;;; Code:
 
 (defun slideview-next-file ()
