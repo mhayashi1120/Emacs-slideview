@@ -26,15 +26,17 @@
 ;; (require 'slideview)
 ;; (define-key view-mode-map "N" 'slideview-next-file)
 ;; (define-key view-mode-map "P" 'slideview-prev-file)
+;; (define-key view-mode-map "S" 'slideview-toggle-slideshow)
 
 
 ;;; TODO:
-;; * turbulance mode
+;; * turbulance(?) mode (ignore extension)
 ;; * arc-mode, tar-mode filter by file extension
 ;; * refactor arc-mode, tar-mode
 ;; * use view-exit-action
 ;; * when directory contains numbered file
 ;;   1.xml 10.xml 2.xml
+;; * can include subdirectory
 
 ;;; Commentary:
 ;; 
@@ -45,6 +47,11 @@
 (require 'view)
 
 ;;; Code:
+
+(defcustom slideview-slideshow-interval 5.0
+  "*"
+  :group 'slideview
+  :type 'float)
 
 (defun slideview-next-file ()
   "View next file (have same extension, sorted by string order)"
@@ -193,6 +200,46 @@
       (error "%s not found" file))))
 
 ;;
+;; slideshow TODO test
+;;
+
+(defvar slideview--slideshow-timer nil)
+(make-variable-buffer-local 'slideview--slideshow-timer)
+
+;;TODO  message
+
+(defun slideview-toggle-slideshow ()
+  (interactive)
+  (cond
+   ((and slideview--slideshow-timer
+         (timerp slideview--slideshow-timer))
+    (message "Stopping slideshow...")
+    (cancel-timer slideview--slideshow-timer))
+   (t
+    (message "Starting slideshow...")
+    (slideview-start-slideshow))))
+
+;; TODO accept interval
+(defun slideview-start-slideshow ()
+  (interactive)
+  (setq slideview--slideshow-timer
+        (run-with-timer slideview-slideshow-interval nil
+                        (slideview--slideshow-next (current-buffer)))))
+
+(defun slideview--slideshow-next (buffer)
+  `(lambda ()
+     (condition-case nil
+         (progn
+           (when (buffer-live-p ,buffer)
+             (with-current-buffer ,buffer
+               (slideview-next-file))
+             (slideview-start-slideshow)))
+       ;;TODO restrict by signal type
+       (error 
+        (unless (buffer-modified-p)
+          (kill-buffer))))))
+
+;;
 ;; Utilities
 ;;
 
@@ -203,7 +250,7 @@
 
 (defun slideview--serialize-local-variables ()
   (loop for p in (buffer-local-variables)
-        if (string-match "^slideview" (symbol-name (car p)))
+        if (string-match "^slideview-" (symbol-name (car p)))
         collect p))
 
 (provide 'slideview)
