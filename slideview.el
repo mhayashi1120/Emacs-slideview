@@ -28,6 +28,15 @@
 ;; (define-key view-mode-map "P" 'slideview-prev-file)
 ;; (define-key view-mode-map "S" 'slideview-toggle-slideshow)
 
+;; todo
+;; 1. open any file. (C-x C-f)
+;; 2. M-x view-mode
+;; 3. Type `N' to next file.
+
+;; 1. view any file (M-x view-file)
+;; 2. Type `N' to next file.
+
+;; todo spc to next file.
 
 ;;; TODO:
 ;; * turbulance(?) mode (ignore extension)
@@ -37,6 +46,7 @@
 ;; * when directory contains numbered file
 ;;   1.xml 10.xml 2.xml
 ;; * can include subdirectory
+;; * look ahead
 
 ;;; Commentary:
 ;; 
@@ -49,7 +59,7 @@
 ;;; Code:
 
 (defcustom slideview-slideshow-interval 5.0
-  "*"
+  "*todo"
   :group 'slideview
   :type 'float)
 
@@ -76,23 +86,55 @@
       (slideview--tar-step reverse-p))
      (t
       (slideview--directory-step reverse-p)))
-    (slideview--restore-local-variables vars)
-    (unless view-mode
-      (view-mode 1))))
+    (slideview--restore-local-variables vars)))
+
+(defun slideview--anticipate-background (func)
+  (run-with-idle-timer 
+   0.5 nil 
+   `(lambda (buf)
+      (when (buffer-live-p buf)
+        (with-current-buffer buf
+          (save-window-excursion
+            (let ((next (,func)))
+              (when (bufferp next)
+                (bury-buffer next)))))))
+   (current-buffer)))
 
 ;;
 ;; for directory files
 ;;
 
 (defun slideview--directory-step (reverse-p)
-  (let* ((file buffer-file-name)
-         (next (slideview--directory-files file reverse-p)))
-    (unless next
-      (error "No more file"))
-    (kill-buffer (current-buffer))
-    (view-file next)))
+  (let ((prev (current-buffer))
+        (next (slideview--directory-find-next reverse-p)))
+    (if reverse-p
+        (bury-buffer prev)
+      (kill-buffer prev))
+    (unless reverse-p
+      (when next
+        (switch-to-buffer next)
+        (slideview--anticipate-background 
+         'slideview--directory-anticipate)))))
 
-(defun slideview--directory-files (file reverse)
+(defun slideview--directory-find-next (reverse-p &optional no-error)
+  (let* ((file buffer-file-name)
+         (next (slideview--directory-next file reverse-p)))
+    (cond
+     (next
+      (slideview--view-file next))
+     (no-error nil)
+     (t
+      (error "No more file")))))
+
+(defun slideview--view-file (file)
+  (view-file file)
+  ;; force to `view-mode'
+  ;; because `image-mode' `mode-class' is `special' (TODO why?)
+  (unless view-mode
+    (view-mode 1))
+  (current-buffer))
+
+(defun slideview--directory-next (file reverse)
   (let* ((dir (file-name-directory file))
          (name (file-name-nondirectory file))
          (ext (file-name-extension file))
@@ -103,20 +145,39 @@
       (lambda (x) (expand-file-name x dir))
       (cdr (member name files))))))
 
+(defun slideview--directory-anticipate ()
+  (let ((next (slideview--directory-next buffer-file-name nil)))
+    (when next
+      (find-file-noselect next t))))
+
 ;;
 ;; tar-mode
 ;;
 
 (defun slideview--tar-step (reverse-p)
+  (let ((prev (current-buffer))
+        (next (slideview--tar-find-next reverse-p)))
+    (if reverse-p
+        (bury-buffer prev)
+      (kill-buffer prev))
+    (unless reverse-p
+      (when next
+        (switch-to-buffer next)
+        (slideview--anticipate-background 
+         (lambda ()
+           (slideview--tar-find-next nil t)))))))
+
+(defun slideview--tar-find-next (reverse-p &optional no-error)
   (let ((superior (slideview--tar-buffer))
-        (path (tar-header-name tar-superior-descriptor))
-        (prev (current-buffer)))
+        (path (tar-header-name tar-superior-descriptor)))
     (with-current-buffer superior
       (let ((next (slideview--tar-next path reverse-p)))
-        (unless next
-          (error "No more file"))
-        (slideview--tar-view-file next)))
-    (kill-buffer prev)))
+        (cond
+         (next
+          (slideview--tar-view-file next))
+         (no-error nil)
+         (t
+          (error "No more file")))))))
 
 (defun slideview--tar-buffer ()
   (or (and tar-superior-buffer
@@ -135,33 +196,53 @@
     (cadr (member path files))))
 
 (defun slideview--tar-view-file (file)
-  (let ((first (point))
-        desc)
-    (goto-char (point-min))
-    (catch 'done
-      (while (setq desc (tar-current-descriptor))
-        (when (string= (tar-header-name desc) file)
-          (tar-extract 'view)
-          (throw 'done t))
-        (tar-next-line 1))
-      ;; not found. restore the previous point
-      (goto-char first)
-      (error "%s not found" file))))
+  (or
+   (let* ((name (concat buffer-file-name "!" file))
+          (buf (get-file-buffer name)))
+     (when buf
+       (switch-to-buffer buf)
+       buf))
+   (let ((first (point))
+         desc)
+     (goto-char (point-min))
+     (catch 'done
+       (while (setq desc (tar-current-descriptor))
+         (when (string= (tar-header-name desc) file)
+           (tar-extract 'view)
+           (throw 'done (current-buffer)))
+         (tar-next-line 1))
+       ;; not found. restore the previous point
+       (goto-char first)
+       (error "%s not found" file)))))
 
 ;;
 ;; for archive-mode
 ;;
 
 (defun slideview--archive-step (reverse-p)
+  (let ((prev (current-buffer))
+        (next (slideview--archive-find-next reverse-p)))
+    (if reverse-p
+        (bury-buffer prev)
+      (kill-buffer prev))
+    (unless reverse-p
+      (when next
+        (switch-to-buffer next)
+        (slideview--anticipate-background 
+         (lambda ()
+           (slideview--archive-find-next nil t)))))))
+
+(defun slideview--archive-find-next (reverse-p &optional no-error)
   (let ((superior (slideview--archive-buffer))
-        (path (aref archive-subfile-mode 0))
-        (prev (current-buffer)))
+        (path (aref archive-subfile-mode 0)))
     (with-current-buffer superior
       (let ((next (slideview--archive-next path reverse-p)))
-        (unless next
-          (error "No more file"))
-        (slideview--archive-view-file next)))
-    (kill-buffer prev)))
+        (cond
+         (next
+          (slideview--archive-view-file next))
+         (no-error nil)
+         (t
+          (error "No more file")))))))
 
 (defun slideview--archive-next (path reverse)
   (let* ((files (sort 
@@ -186,18 +267,24 @@
                      (find-file-noselect archive))))))))
 
 (defun slideview--archive-view-file (file)
-  (let ((first (point))
-        desc)
-    (goto-char archive-file-list-start)
-    (catch 'done
-      (while (setq desc (archive-get-descr t))
-        (when (string= (aref desc 0) file)
-          (archive-view)
-          (throw 'done t))
-        (archive-next-line 1))
-      ;; not found. restore the previous point
-      (goto-char first)
-      (error "%s not found" file))))
+  (or
+   (let* ((name (concat buffer-file-name ":" file))
+          (buf (get-file-buffer name)))
+     (when buf
+       (switch-to-buffer buf)
+       buf))
+   (let ((first (point))
+         desc)
+     (goto-char archive-file-list-start)
+     (catch 'done
+       (while (setq desc (archive-get-descr t))
+         (when (string= (aref desc 0) file)
+           (archive-view)
+           (throw 'done (current-buffer)))
+         (archive-next-line 1))
+       ;; not found. restore the previous point
+       (goto-char first)
+       (error "%s not found" file)))))
 
 ;;
 ;; slideshow TODO test
@@ -226,22 +313,43 @@
         (run-with-timer slideview-slideshow-interval nil
                         (slideview--slideshow-next (current-buffer)))))
 
+;;TODO switch to other buffer after start.
 (defun slideview--slideshow-next (buffer)
   `(lambda ()
      (condition-case nil
          (progn
            (when (buffer-live-p ,buffer)
-             (with-current-buffer ,buffer
-               (slideview-next-file))
-             (slideview-start-slideshow)))
+             ;;TODO
+             (save-window-excursion
+               (with-current-buffer ,buffer
+                 (slideview-next-file)
+                 ;;TODO how to start new timer before slide to next
+                 (slideview-start-slideshow)))))
        ;;TODO restrict by signal type
        (error 
-        (unless (buffer-modified-p)
-          (kill-buffer))))))
+        (when (buffer-live-p ,buffer)
+          (kill-buffer ,buffer))))))
 
 ;;
 ;; Utilities
 ;;
+
+(defvar slideview-slideshow-mode-map nil)
+
+(unless slideview-slideshow-mode-map
+  (let ((map (make-sparse-keymap)))
+
+    (define-key map " " 'slideview-next-file)
+    (define-key map "\d" 'slideview-prev-file)
+
+    (setq slideview-slideshow-mode-map map)))
+
+(define-minor-mode slideview-slideshow-mode
+  ""
+  :init-value nil
+  :lighter " Slide"
+  :keymap slideview-slideshow-mode-map
+  )
 
 (defun slideview--restore-local-variables (variables)
   (loop for p in variables
