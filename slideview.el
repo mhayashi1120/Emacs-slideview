@@ -70,7 +70,7 @@
   (interactive)
   (slideview--step t))
 
-(defcustom slideview-prefetch-threshold 5
+(defcustom slideview-prefetch-threshold 2
   "*todo")
 
 (defun slideview--prefetch-background (buffer context &optional count)
