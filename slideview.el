@@ -22,8 +22,11 @@
 ;; Boston, MA 02110-1301, USA.
 
 ;;; Usage:
-
+;;
 ;; (require 'slideview)
+
+;;; Commentary:
+;; 
 
 ;;TODO M-x slideview-mode
 
@@ -33,7 +36,7 @@
 ;; 3. Type `N' to next file.
 
 ;; 1. view any file (M-x view-file)
-;; 2. Type `N' to next file.
+;; 2. Type SPACE to next file.
 
 ;; todo spc to next file.
 
@@ -44,8 +47,8 @@
 ;; * can include subdirectory
 ;; * look ahead (more sophisticated)
 
-;;; Commentary:
-;; 
+
+;;; Code:
 
 (eval-when-compile
   (require 'cl))
@@ -53,7 +56,9 @@
 (require 'view)
 (require 'eieio)
 
-;;; Code:
+(defgroup slideview ()
+  "Sequential viewing files."
+  :group 'applications)
 
 (defcustom slideview-slideshow-interval 5.0
   "*todo"
@@ -70,8 +75,8 @@
   (interactive)
   (slideview--step t))
 
-(defcustom slideview-prefetch-threshold 2
-  "*todo")
+(defcustom slideview-prefetch-count 2
+  "*Number of count prefetching slideshow files.")
 
 (defun slideview--prefetch-background (buffer context &optional count)
   "FUNC must receive one arg and return next buffer.
@@ -79,7 +84,7 @@ That arg is CONTEXT.
 "
   (run-with-idle-timer 
    0.5 nil `slideview--prefetch-body
-   buffer context (or count slideview-prefetch-threshold)))
+   buffer context (or count slideview-prefetch-count)))
 
 (defun slideview--prefetch-body (buf ctx remain)
   (when (buffer-live-p buf)
@@ -97,7 +102,6 @@ That arg is CONTEXT.
             :initform nil)
    (base-file :initarg :base-file
               :type string))
-  "todo"
   :abstract t)
 
 (defvar slideview--context nil)
@@ -131,6 +135,7 @@ That arg is CONTEXT.
         (slideview--prefetch)))))
 
 (defun slideview--kill-buffer (buffer)
+  "Kill BUFFER suppress `slideview--cleanup' execution."
   (with-current-buffer buffer
     (remove-hook 'kill-buffer-hook 'slideview--cleanup t))
   (kill-buffer buffer))
@@ -406,10 +411,7 @@ That arg is CONTEXT.
     (add-hook 'kill-buffer-hook 'slideview--cleanup nil t)
     (setq slideview--context 
           (or slideview--next-context
-              (slideview-new-context)))
-    ;;TODO
-    ;; (slideview--prefetch)
-    )
+              (slideview-new-context))))
    (t
     (remove-hook 'kill-buffer-hook 'slideview--cleanup t)
     (when slideview--context 
@@ -423,19 +425,11 @@ That arg is CONTEXT.
 (defun slideview--cleanup-buffers (context)
   (mapc 
    (lambda (b)
-     ;;TODO 
+     ;; save the current buffer
      (and (not (eq (current-buffer) b))
           (buffer-live-p b)
           (slideview--kill-buffer b)))
    (oref context buffers)))
-
-;;
-;; eieio todo
-;;
-
-;;TODO
-(defmethod slideview-update-context ((this slideview-context) &rest fields)
-  )
 
 ;;
 ;; Utilities
