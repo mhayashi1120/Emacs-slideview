@@ -347,21 +347,20 @@ That arg is CONTEXT.
 ;;
 
 (defvar slideview--slideshow-timer nil)
-;;TODO only one slideshow in one emacs process
+;;TODO only one slideshow in one emacs process?
 (make-variable-buffer-local 'slideview--slideshow-timer)
-
-;;TODO  message
 
 (defun slideview-toggle-slideshow ()
   (interactive)
   (cond
    ((and slideview--slideshow-timer
          (timerp slideview--slideshow-timer))
-    (message "Stopping slideshow...")
-    (cancel-timer slideview--slideshow-timer))
+    (cancel-timer slideview--slideshow-timer)
+    (setq slideview--slideshow-timer nil)
+    (message "Slideshow is stopped."))
    (t
-    (message "Starting slideshow...")
-    (slideview-start-slideshow))))
+    (slideview-start-slideshow)
+    (message "Starting slideshow..."))))
 
 ;; TODO accept interval
 (defun slideview-start-slideshow ()
@@ -371,6 +370,7 @@ That arg is CONTEXT.
                         (slideview--slideshow-next (current-buffer)))))
 
 ;;TODO switch to other buffer after start.
+;;TODO when step to backward
 (defun slideview--slideshow-next (buffer)
   `(lambda ()
      (condition-case nil
