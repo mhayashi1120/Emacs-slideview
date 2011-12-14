@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: slideshow
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.0.1
+;; Version: 0.5.1
 ;; Package-Requires: ()
 
 ;; This program is free software; you can redistribute it and/or
