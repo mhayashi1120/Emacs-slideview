@@ -97,11 +97,87 @@ That arg is CONTEXT.
               (slideview--prefetch-background
                next ctx (1- remain)))))))))
 
+(defun slideview-concat-next-if-image ()
+  (interactive)
+  ;; todo rename buffer?
+  (when (derived-mode-p 'image-mode)
+    (let ((next
+           (slideview-save-buffer
+            (let ((buf (slideview--next-buffer slideview--context nil)))
+              (when (and (bufferp buf)
+                         (buffer-live-p buf))
+                (with-current-buffer buf
+                  (and (derived-mode-p 'image-mode)
+                       (image-get-display-property)))))))
+          (context slideview--context))
+      (when next
+        ;;TODO margin direction
+        ;;TODO skip next file if concat is succeeded
+        (slideview-concat-image 
+         next (oref context margin)
+         (oref context direction))))))
+
+(defun slideview-concat-image (image2 margin direction)
+  (unless (memq direction '(bottom left right))
+    (error "Not supported direction"))
+  (save-excursion
+    (let ((inhibit-read-only t))
+      (cond
+       ((eq direction 'right)
+        (goto-char (point-max))
+        (insert (make-string (/ margin (frame-char-width)) ?\s)))
+       ((eq direction 'left)
+        (goto-char (point-min))
+        (save-excursion
+          (insert (make-string (/ margin (frame-char-width)) ?\s))))
+       ((eq direction 'bottom)
+        (goto-char (point-max))
+        ;; insert newline after current image.
+        (insert (make-string (1+ (/ margin (frame-char-height))) ?\n))))
+      (insert-image image2)
+      (set-buffer-modified-p nil))))
+
+(defvar slideview--settings nil)
+
+;;TODO sample of settings
+(defun* slideview-modify-setting (base-file &key margin direction)
+  (unless (or (null direction) (memq direction '(left right bottom)))
+    ;;TODO
+    (signal 'argument-error nil))
+  (unless (or (null margin) (numberp margin))
+    (signal 'wrong-type-argument (list margin)))
+  (let ((setting (slideview-get-setting base-file)))
+    (when setting
+      (setq slideview--settings (remq setting slideview--settings)))
+    (setq slideview--settings
+          (cons
+           `(,(directory-file-name base-file)
+             ,@(if direction `((direction . ,direction)) '())
+             ,@(if margin `((margin . ,margin)) '()))
+           slideview--settings))))
+
+(defun slideview-get-setting (base-file)
+  (let ((key (directory-file-name base-file)))
+    ;;TODO case
+    (assoc key slideview--settings)))
+
+(defun* slideview-add-matched-file (directory regexp &key margin direction)
+  (mapc
+   (lambda (f)
+     (when (file-directory-p f)
+       (slideview-modify-setting f :margin margin :direction direction)))
+   (directory-files directory t regexp))
+  slideview--settings)
+
 (defclass slideview-context ()
   ((buffers :type list
             :initform nil)
    (base-file :initarg :base-file
-              :type string))
+              :type string)
+   (direction :type symbol
+              :initform 'right)
+   (margin :type number 
+           :initform 0))
   :abstract t)
 
 (defvar slideview--context nil)
@@ -112,15 +188,24 @@ That arg is CONTEXT.
 (defun slideview-new-context ()
   (unless buffer-file-name
     (error "Not a file buffer"))
-  (cond
-   ((and (boundp 'archive-subfile-mode)
-         archive-subfile-mode)
-    (make-instance slideview-archive-context))
-   ((and (boundp 'tar-buffer)           ;FIXME tar-buffer is local-variable
-         tar-buffer)
-    (make-instance slideview-tar-context))
-   (t
-    (make-instance slideview-directory-context))))
+  (let* ((ctx (cond
+               ((and (boundp 'archive-subfile-mode)
+                     archive-subfile-mode)
+                (make-instance slideview-archive-context))
+               ((and (boundp 'tar-buffer)
+                     ;; FIXME tar-buffer is `let' bind local-variable
+                     ;;   defined at `tar-extract'
+                     tar-buffer)
+                (make-instance slideview-tar-context))
+               (t
+                (make-instance slideview-directory-context))))
+         (setting (slideview-get-setting (oref ctx base-file))))
+    (when setting
+      (mapc
+       (lambda (x)
+         (eieio-oset ctx (car x) (cdr x)))
+       (cdr setting)))
+    ctx))
 
 (defun slideview--step (&optional reverse-p)
   (let* ((context slideview--context)
@@ -129,10 +214,10 @@ That arg is CONTEXT.
     (if reverse-p
         (bury-buffer prev)
       (slideview--kill-buffer prev))
+    (when next
+      (switch-to-buffer next))
     (unless reverse-p
-      (when next
-        (switch-to-buffer next)
-        (slideview--prefetch)))))
+      (slideview--prefetch))))
 
 (defun slideview--kill-buffer (buffer)
   "Kill BUFFER suppress `slideview--cleanup' execution."
@@ -144,6 +229,7 @@ That arg is CONTEXT.
   (let* (
          ;; pass to next `slideview-mode'
          (slideview--next-context context) 
+         ;; `slideview--next-buffer' return new buffer
          (next (slideview--next-buffer context reverse-p)))
     (cond
      (next 
@@ -168,6 +254,13 @@ That arg is CONTEXT.
 (defun slideview--next-item (now items reverse-p)
   (let ((items (if reverse-p (reverse items) items)))
     (car (cdr (member now items)))))
+
+(defmacro slideview-save-buffer (&rest body)
+  (let ((prev (gensym "prev")))
+    `(let ((,prev (current-buffer)))
+       (unwind-protect
+           (progn ,@body)
+         (switch-to-buffer ,prev)))))
 
 ;;
 ;; for directory files
@@ -199,7 +292,9 @@ That arg is CONTEXT.
 
 (defmethod slideview--next-buffer ((context slideview-directory-context) reverse-p)
   (let ((next (slideview--next-item buffer-file-name (oref context files) reverse-p)))
-    (and next (slideview--view-file next))))
+    (and next 
+         (slideview-save-buffer
+          (slideview--view-file next)))))
 
 (defun slideview--view-file (file)
   (view-file file)
@@ -239,7 +334,9 @@ That arg is CONTEXT.
                     (tar-header-name tar-superior-descriptor))))
     (with-current-buffer superior
       (let ((next (and path (slideview--next-item path (oref context paths) reverse-p))))
-        (and next (slideview--tar-view-file next))))))
+        (and next 
+             (slideview-save-buffer
+              (slideview--tar-view-file next)))))))
 
 (defmethod slideview--superior-buffer ((context slideview-tar-context))
   (or 
@@ -305,7 +402,9 @@ That arg is CONTEXT.
                     (aref archive-subfile-mode 0))))
     (with-current-buffer superior
       (let ((next (and path (slideview--next-item path (oref context paths) reverse-p))))
-        (and next (slideview--archive-view-file next))))))
+        (and next
+             (slideview-save-buffer
+              (slideview--archive-view-file next)))))))
 
 (defun slideview--archive-view-file (file)
   (or
@@ -398,6 +497,7 @@ That arg is CONTEXT.
 
     (define-key map " " 'slideview-next-file)
     (define-key map "\d" 'slideview-prev-file)
+    (define-key map "\C-c\C-i" 'slideview-concat-next-if-image)
 
     (setq slideview-mode-map map)))
 
