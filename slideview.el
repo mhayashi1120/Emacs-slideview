@@ -98,52 +98,47 @@ That arg is CONTEXT.
                next ctx (1- remain)))))))))
 
 (defun slideview-concat-next-if-image ()
+  "Open the next image file with concatenate current image."
   (interactive)
-  ;; todo rename buffer?
-  (when (derived-mode-p 'image-mode)
-    (let ((next
-           (slideview-save-buffer
-            (let ((buf (slideview--next-buffer slideview--context nil)))
-              (when (and (bufferp buf)
-                         (buffer-live-p buf))
-                (with-current-buffer buf
-                  (and (derived-mode-p 'image-mode)
-                       (image-get-display-property)))))))
-          (context slideview--context))
-      (when next
-        ;;TODO margin direction
-        ;;TODO skip next file if concat is succeeded
-        (slideview-concat-image 
-         next (oref context margin)
-         (oref context direction))))))
+  (unless (derived-mode-p 'image-mode)
+    (error "Not a `image-mode'"))
+  (let ((prev (image-get-display-property))
+        (context slideview--context))
+    (slideview--step)
+    (slideview-concat-image 
+     prev (oref context margin)
+     (oref context direction))))
 
-(defun slideview-concat-image (image2 margin direction)
+(defun slideview-concat-image (prev margin direction)
   (unless (memq direction '(bottom left right))
     (error "Not supported direction"))
   (save-excursion
     (let ((inhibit-read-only t))
       (cond
        ((eq direction 'right)
-        (goto-char (point-max))
+        ;; insert to the left.
+        (goto-char (point-min))
+        (insert-image prev)
         (insert (make-string (/ margin (frame-char-width)) ?\s)))
        ((eq direction 'left)
-        (goto-char (point-min))
-        (save-excursion
-          (insert (make-string (/ margin (frame-char-width)) ?\s))))
-       ((eq direction 'bottom)
+        ;; insert to the right
         (goto-char (point-max))
+        (insert (make-string (/ margin (frame-char-width)) ?\s))
+        (insert-image prev))
+       ((eq direction 'bottom)
+        ;; insert the top of buffer
+        (goto-char (point-min))
+        (insert-image prev)
         ;; insert newline after current image.
         (insert (make-string (1+ (/ margin (frame-char-height))) ?\n))))
-      (insert-image image2)
       (set-buffer-modified-p nil))))
 
 (defvar slideview--settings nil)
 
-;;TODO sample of settings
+;;TODO add sample of settings
 (defun* slideview-modify-setting (base-file &key margin direction)
   (unless (or (null direction) (memq direction '(left right bottom)))
-    ;;TODO
-    (signal 'argument-error nil))
+    (signal 'args-out-of-range (list direction)))
   (unless (or (null margin) (numberp margin))
     (signal 'wrong-type-argument (list margin)))
   (let ((setting (slideview-get-setting base-file)))
@@ -162,6 +157,11 @@ That arg is CONTEXT.
     (assoc key slideview--settings)))
 
 (defun* slideview-add-matched-file (directory regexp &key margin direction)
+  "Add new slideview settings of DIRECTORY files that match to REGEXP.
+
+:margin controls pixel margin between two sequenced images.
+:direction controls slide direction of image files.
+"
   (mapc
    (lambda (f)
      (when (file-directory-p f)
