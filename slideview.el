@@ -137,6 +137,12 @@ That arg is CONTEXT.
 
 ;;TODO add sample of settings
 (defun* slideview-modify-setting (base-file &key margin direction)
+  "Modify new slideview settings of BASE-FILE.
+BASE-FILE is directory or *.tar file or *.zip filename.
+
+:margin controls pixel margin between two sequenced images.
+:direction controls slide direction of image files.
+"
   (unless (or (null direction) (memq direction '(left right bottom)))
     (signal 'args-out-of-range (list direction)))
   (unless (or (null margin) (numberp margin))
@@ -159,8 +165,7 @@ That arg is CONTEXT.
 (defun* slideview-add-matched-file (directory regexp &key margin direction)
   "Add new slideview settings of DIRECTORY files that match to REGEXP.
 
-:margin controls pixel margin between two sequenced images.
-:direction controls slide direction of image files.
+See `slideview-modify-setting' more information.
 "
   (mapc
    (lambda (f)
