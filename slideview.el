@@ -167,11 +167,13 @@ BASE-FILE is directory or *.tar file or *.zip filename.
 
 See `slideview-modify-setting' more information.
 "
-  (mapc
-   (lambda (f)
-     (when (file-directory-p f)
-       (slideview-modify-setting f :margin margin :direction direction)))
-   (directory-files directory t regexp))
+  (cond
+   ((file-directory-p directory)
+    (mapc
+     (lambda (f)
+       (when (file-directory-p f)
+         (slideview-modify-setting f :margin margin :direction direction)))
+     (directory-files directory t regexp))))
   slideview--settings)
 
 (defclass slideview-context ()
@@ -202,6 +204,9 @@ See `slideview-modify-setting' more information.
                      ;;   defined at `tar-extract'
                      tar-buffer)
                 (make-instance slideview-tar-context))
+               ;;TODO
+               ;; ((derived-mode-p 'doc-view-mode)
+               ;;  (make-instance slideview-pdf-context))
                (t
                 (make-instance slideview-directory-context))))
          (setting (slideview-get-setting (oref ctx base-file))))
