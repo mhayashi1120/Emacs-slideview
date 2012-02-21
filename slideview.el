@@ -29,10 +29,10 @@
 ;; (add-hook 'image-mode-hook 'slideview-mode)
 
 ;;; Commentary:
-;; 
+;;
 
 ;; * TODO: Indicate slideview file.tar.bz2
-;;   
+;;
 ;; (slideview-modify-setting "/path/to/file.tar.bz2"
 ;;     :margin 30 :direction 'right)
 
@@ -44,7 +44,7 @@
 
 ;; * C-c C-i (Work only in `image-mode')
 ;;   Concat current image with next image.
-;;   To indicate the viewing file direction, please use 
+;;   To indicate the viewing file direction, please use
 ;;   `slideview-modify-setting' or `slideview-add-matched-file'
 
 ;;TODO M-x slideview-mode
@@ -101,7 +101,7 @@
   "FUNC must receive one arg and return next buffer.
 That arg is CONTEXT.
 "
-  (run-with-idle-timer 
+  (run-with-idle-timer
    0.5 nil `slideview--prefetch-body
    buffer context (or count slideview-prefetch-count)))
 
@@ -133,7 +133,7 @@ See `slideview-modify-setting' about this settings.
                         (slideview--kill-buffer buf))))))
     (unless prev
       (error "No more previous image"))
-    (slideview-concat-image 
+    (slideview-concat-image
      prev (oref context margin)
      (oref context direction))))
 
@@ -148,7 +148,7 @@ See `slideview-modify-setting' about this settings.
   (let ((prev (image-get-display-property))
         (context slideview--context))
     (slideview--step)
-    (slideview-concat-image 
+    (slideview-concat-image
      prev (oref context margin)
      (oref context direction))))
 
@@ -226,7 +226,7 @@ See `slideview-modify-setting' more information.
               :type string)
    (direction :type symbol
               :initform 'right)
-   (margin :type number 
+   (margin :type number
            :initform 0))
   :abstract t)
 
@@ -281,12 +281,12 @@ See `slideview-modify-setting' more information.
 (defun slideview--find-next (context reverse-p &optional no-error)
   (let* (
          ;; pass to next `slideview-mode'
-         (slideview--next-context context) 
+         (slideview--next-context context)
          ;; `slideview--next-buffer' return new buffer
          (next (slideview--next-buffer context reverse-p)))
     (cond
-     (next 
-      (let ((bufs (delq nil (mapcar 
+     (next
+      (let ((bufs (delq nil (mapcar
                              (lambda (b)
                                (and (buffer-live-p b) b))
                              (oref context buffers)))))
@@ -300,7 +300,7 @@ See `slideview-modify-setting' more information.
       (error "No more file")))))
 
 (defun slideview--prefetch (&optional buffer context)
-  (slideview--prefetch-background 
+  (slideview--prefetch-background
    (or buffer (current-buffer))
    (or context slideview--context)))
 
@@ -335,9 +335,9 @@ See `slideview-modify-setting' more information.
          (name (file-name-nondirectory file))
          (files (directory-files dir nil "^\\(?:[^.]\\|\\.\\(?:[^.]\\|\\..\\)\\)")))
     (oset this files
-          (delq nil 
-                (mapcar 
-                 (lambda (x) 
+          (delq nil
+                (mapcar
+                 (lambda (x)
                    ;; exclude directory
                    (unless (eq (car (file-attributes x)) t)
                      (expand-file-name x dir)))
@@ -345,7 +345,7 @@ See `slideview-modify-setting' more information.
 
 (defmethod slideview--next-buffer ((context slideview-directory-context) reverse-p)
   (let ((next (slideview--next-item buffer-file-name (oref context files) reverse-p)))
-    (and next 
+    (and next
          (slideview-save-buffer
           (slideview--view-file next)))))
 
@@ -376,23 +376,23 @@ See `slideview-modify-setting' more information.
   (with-current-buffer (slideview--superior-buffer this)
     (oset this :base-file buffer-file-name)
     (oset this paths
-          (let* ((files (sort 
+          (let* ((files (sort
                          (mapcar 'tar-header-name tar-parse-info)
                          'string-lessp)))
             files))))
 
 (defmethod slideview--next-buffer ((context slideview-tar-context) reverse-p)
   (let* ((superior (slideview--superior-buffer context))
-         (path (and superior tar-superior-descriptor 
+         (path (and superior tar-superior-descriptor
                     (tar-header-name tar-superior-descriptor))))
     (with-current-buffer superior
       (let ((next (and path (slideview--next-item path (oref context paths) reverse-p))))
-        (and next 
+        (and next
              (slideview-save-buffer
               (slideview--tar-view-file next)))))))
 
 (defmethod slideview--superior-buffer ((context slideview-tar-context))
-  (or 
+  (or
    (and (bufferp tar-superior-buffer)
         (buffer-live-p tar-superior-buffer)
         tar-superior-buffer)
@@ -443,7 +443,7 @@ See `slideview-modify-setting' more information.
   (with-current-buffer (slideview--superior-buffer this)
     (oset this :base-file buffer-file-name)
     (oset this paths
-          (let* ((files (sort 
+          (let* ((files (sort
                          (loop for f across archive-files
                                collect (aref f 0))
                          'string-lessp)))
@@ -480,7 +480,7 @@ See `slideview-modify-setting' more information.
        (error "%s not found" file)))))
 
 (defmethod slideview--superior-buffer ((context slideview-archive-context))
-  (or 
+  (or
    (and (bufferp archive-superior-buffer)
         (buffer-live-p archive-superior-buffer)
         archive-superior-buffer)
@@ -535,7 +535,7 @@ See `slideview-modify-setting' more information.
                  ;;TODO how to start new timer before slide to next
                  (slideview-start-slideshow)))))
        ;;TODO restrict by signal type
-       (error 
+       (error
         (when (buffer-live-p ,buffer)
           (kill-buffer ,buffer))))))
 
@@ -563,12 +563,12 @@ See `slideview-modify-setting' more information.
   (cond
    (slideview-mode
     (add-hook 'kill-buffer-hook 'slideview--cleanup nil t)
-    (setq slideview--context 
+    (setq slideview--context
           (or slideview--next-context
               (slideview-new-context))))
    (t
     (remove-hook 'kill-buffer-hook 'slideview--cleanup t)
-    (when slideview--context 
+    (when slideview--context
       (slideview--cleanup)))))
 
 (defun slideview--cleanup ()
@@ -577,7 +577,7 @@ See `slideview-modify-setting' more information.
     (error nil)))
 
 (defun slideview--cleanup-buffers (context)
-  (mapc 
+  (mapc
    (lambda (b)
      ;; save the current buffer
      (and (not (eq (current-buffer) b))
