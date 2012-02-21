@@ -24,9 +24,28 @@
 ;;; Usage:
 ;;
 ;; (require 'slideview)
+;;
+;; Start slideview-mode automatically when open a image file.
+;; (add-hook 'image-mode-hook 'slideview-mode)
 
 ;;; Commentary:
 ;; 
+
+;; * TODO: Indicate slideview file.tar.bz2
+;;   
+;; (slideview-modify-setting "/path/to/file.tar.bz2"
+;;     :margin 30 :direction 'right)
+
+;; * Space
+;;   Move forward slideview
+
+;; * Backspace
+;;   Move backward slideview
+
+;; * C-c C-i (Work only in `image-mode')
+;;   Concat current image with next image.
+;;   To indicate the viewing file direction, please use 
+;;   `slideview-modify-setting' or `slideview-add-matched-file'
 
 ;;TODO M-x slideview-mode
 
@@ -97,8 +116,32 @@ That arg is CONTEXT.
               (slideview--prefetch-background
                next ctx (1- remain)))))))))
 
+(defun slideview-concat-prev-if-image ()
+  "Reopen the previous image file with concatenate current image.
+
+See `slideview-modify-setting' about this settings.
+"
+  (interactive)
+  (unless (derived-mode-p 'image-mode)
+    (error "Not a `image-mode'"))
+  (let* ((context slideview--context)
+         (prev (let ((buf (slideview--find-next context t)))
+                 (and buf
+                      (prog1
+                          (with-current-buffer buf
+                            (image-get-display-property))
+                        (slideview--kill-buffer buf))))))
+    (unless prev
+      (error "No more previous image"))
+    (slideview-concat-image 
+     prev (oref context margin)
+     (oref context direction))))
+
 (defun slideview-concat-next-if-image ()
-  "Open the next image file with concatenate current image."
+  "Open the next image file with concatenate current image.
+
+See `slideview-modify-setting' about this settings.
+"
   (interactive)
   (unless (derived-mode-p 'image-mode)
     (error "Not a `image-mode'"))
@@ -205,8 +248,8 @@ See `slideview-modify-setting' more information.
                      tar-buffer)
                 (make-instance slideview-tar-context))
                ;;TODO
-               ;; ((derived-mode-p 'doc-view-mode)
-               ;;  (make-instance slideview-pdf-context))
+               ((derived-mode-p 'doc-view-mode)
+                (make-instance slideview-pdf-context))
                (t
                 (make-instance slideview-directory-context))))
          (setting (slideview-get-setting (oref ctx base-file))))
@@ -243,10 +286,10 @@ See `slideview-modify-setting' more information.
          (next (slideview--next-buffer context reverse-p)))
     (cond
      (next 
-      (let ((bufs (remq nil (mapcar 
-                              (lambda (b)
-                                (and (buffer-live-p b) b))
-                              (oref context buffers)))))
+      (let ((bufs (delq nil (mapcar 
+                             (lambda (b)
+                               (and (buffer-live-p b) b))
+                             (oref context buffers)))))
         (with-current-buffer next
           (slideview-mode 1))
         (unless (memq next bufs)
@@ -292,7 +335,7 @@ See `slideview-modify-setting' more information.
          (name (file-name-nondirectory file))
          (files (directory-files dir nil "^\\(?:[^.]\\|\\.\\(?:[^.]\\|\\..\\)\\)")))
     (oset this files
-          (remq nil 
+          (delq nil 
                 (mapcar 
                  (lambda (x) 
                    ;; exclude directory
@@ -508,6 +551,7 @@ See `slideview-modify-setting' more information.
     (define-key map " " 'slideview-next-file)
     (define-key map "\d" 'slideview-prev-file)
     (define-key map "\C-c\C-i" 'slideview-concat-next-if-image)
+    (define-key map "\C-c\C-p" 'slideview-concat-prev-if-image)
 
     (setq slideview-mode-map map)))
 
