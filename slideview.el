@@ -376,13 +376,6 @@ See `slideview-modify-setting' more information.
   (let ((items (if reverse-p (reverse items) items)))
     (car (cdr (member now items)))))
 
-(defmacro slideview-save-buffer (&rest body)
-  (let ((prev (make-symbol "prev")))
-    `(let ((,prev (current-buffer)))
-       (unwind-protect
-           (progn ,@body)
-         (switch-to-buffer ,prev)))))
-
 ;;
 ;; for directory files
 ;;
@@ -414,8 +407,8 @@ See `slideview-modify-setting' more information.
 (defmethod slideview--next-buffer ((context slideview-directory-context) reverse-p)
   (let ((next (slideview--next-item buffer-file-name (oref context files) reverse-p)))
     (and next
-         (slideview-save-buffer
-          (slideview--view-file next)))))
+         (save-window-excursion
+           (slideview--view-file next)))))
 
 (defun slideview--view-file (file)
   (view-file file)
@@ -456,8 +449,8 @@ See `slideview-modify-setting' more information.
     (with-current-buffer superior
       (let ((next (and path (slideview--next-item path (oref context paths) reverse-p))))
         (and next
-             (slideview-save-buffer
-              (slideview--tar-view-file next)))))))
+             (save-window-excursion
+               (slideview--tar-view-file next)))))))
 
 (defmethod slideview--superior-buffer ((context slideview-tar-context))
   (or
@@ -524,8 +517,8 @@ See `slideview-modify-setting' more information.
     (with-current-buffer superior
       (let ((next (and path (slideview--next-item path (oref context paths) reverse-p))))
         (and next
-             (slideview-save-buffer
-              (slideview--archive-view-file next)))))))
+             (save-window-excursion
+               (slideview--archive-view-file next)))))))
 
 (defun slideview--archive-view-file (file)
   (or
