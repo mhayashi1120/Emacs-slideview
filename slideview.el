@@ -159,7 +159,7 @@ See `slideview-modify-setting' about this settings.
     (error "Not supported direction"))
   (save-excursion
     (let ((inhibit-read-only t)
-          ;;TODO suppress userlock
+          ;;TODO to suppress the userlock
           (buffer-file-name))
       (cond
        ((eq direction 'right)
@@ -649,6 +649,72 @@ See `slideview-modify-setting' more information.
          ((< l2 l1) nil)
          (t
           (string-lessp x1 x2)))))
+
+;; TODO
+
+(defvar slideview-thumbnail-window nil)
+(make-variable-buffer-local 'slideview-thumbnail-window)
+
+(defcustom slideview-show-image-thumbnail t
+  "TODO"
+  :group 'slideview
+  :type 'boolean)
+
+(defun slideview-show-image-thumbnails (&optional horizontal)
+  (interactive "P")
+  ;;TODO horizontal
+  (unless (derived-mode-p 'image-mode)
+    (error "TODO"))
+  (let ((wh (window-height))
+        (ww (window-width))
+        (image (image-get-display-property)))
+    (when (and (consp image)
+               (eq (car image) 'image))
+      (let* ((size (image-size image t))
+             (win slideview-thumbnail-window))
+        ;;TODO 8 is margin of image
+        (unless (and win (window-live-p win))
+          (delete-other-windows)
+          (setq win nil))
+        (let ((iw (window-width))
+              (ih (window-height)))
+          ;;TODO 2 is scroll bar width 
+          (cond
+           (horizontal
+            (unless (memq win (window-list))
+              (let* ((pixel image-dired-thumb-width)
+                     (wid (+ (/ pixel (frame-char-width)) 5)))
+                (setq win (split-window nil (- iw wid) t)))))
+           (t
+            (unless (memq win (window-list))
+              (let* ((pixel image-dired-thumb-height)
+                     (hei (+ (/ pixel (frame-char-height)) 5)))
+                (setq win (split-window nil (- ih hei)))))))
+          (when win
+            (let ((thumb-buf (slideview-image-prepare-thumbnail-buffer))
+                  ;;TODO only directory context
+                  (files (oref slideview--context files)))
+              (when thumb-buf
+                ;;TODO
+                (require 'image-dired+)
+                (imagex-dired-show-image-thumbnails thumb-buf files)
+                (set-window-buffer win thumb-buf)
+                (slideview-image-set-thumbnail-cursor buffer-file-name))))
+          (setq slideview-thumbnail-window win))))))
+
+(defvar slideview-image-thumb-context)
+(defun slideview-image-prepare-thumbnail-buffer ()
+  (let ((buf (get-buffer-create " *slideview thumb* "))
+        (context slideview--context))
+    (with-current-buffer buf
+      (unless (and (boundp 'slideview-image-thumb-context)
+                   (eq (symbol-value 'slideview-image-thumb-context) context))
+        (set (make-local-variable 'slideview-image-thumb-context) context)
+        buf))))
+
+(defun slideview-image-set-thumbnail-cursor (file)
+  ;; TODO
+  (get-text-property (point) 'original-file-name))
 
 (provide 'slideview)
 
