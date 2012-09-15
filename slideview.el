@@ -80,7 +80,7 @@
   :group 'applications)
 
 (defcustom slideview-slideshow-interval 5.0
-  "*todo"
+  "*Interval seconds to next file when slideshow is activated."
   :group 'slideview
   :type 'float)
 
@@ -116,12 +116,13 @@ That arg is CONTEXT.
               (slideview--prefetch-background
                next ctx (1- remain)))))))))
 
-(defun slideview-concat-prev-if-image ()
+(defun slideview-concat-prev-if-image (&optional direction)
   "Reopen the previous image file with concatenate current image.
 
 See `slideview-modify-setting' about this settings.
 "
-  (interactive)
+  (interactive (if current-prefix-arg
+                   (list (slideview-read-direction))))
   (unless (derived-mode-p 'image-mode)
     (error "Not a `image-mode'"))
   (let* ((context slideview--context)
@@ -135,14 +136,15 @@ See `slideview-modify-setting' about this settings.
       (error "No more previous image"))
     (slideview-concat-image
      prev (oref context margin)
-     (oref context direction))))
+     (or direction (oref context direction)))))
 
-(defun slideview-concat-next-if-image ()
+(defun slideview-concat-next-if-image (&optional direction)
   "Open the next image file with concatenate current image.
 
 See `slideview-modify-setting' about this settings.
 "
-  (interactive)
+  (interactive (if current-prefix-arg
+                   (list (slideview-read-direction))))
   (unless (derived-mode-p 'image-mode)
     (error "Not a `image-mode'"))
   (let ((prev (image-get-display-property))
@@ -150,13 +152,15 @@ See `slideview-modify-setting' about this settings.
     (slideview--step)
     (slideview-concat-image
      prev (oref context margin)
-     (oref context direction))))
+     (or direction (oref context direction)))))
 
 (defun slideview-concat-image (prev margin direction)
   (unless (memq direction '(bottom left right))
     (error "Not supported direction"))
   (save-excursion
-    (let ((inhibit-read-only t))
+    (let ((inhibit-read-only t)
+          ;;TODO suppress userlock
+          (buffer-file-name))
       (cond
        ((eq direction 'right)
         ;; insert to the left.
@@ -192,18 +196,33 @@ BASE-FILE is directory or *.tar file or *.zip filename.
     (signal 'wrong-type-argument (list margin)))
   (let ((setting (slideview-get-setting base-file)))
     (when setting
-      (setq slideview--settings (remq setting slideview--settings)))
+      (setq slideview--settings (delq setting slideview--settings)))
     (setq slideview--settings
           (cons
-           `(,(directory-file-name base-file)
-             ,@(if direction `((direction . ,direction)) '())
-             ,@(if margin `((margin . ,margin)) '()))
+           `(:file ,(directory-file-name base-file)
+                   ,@(if direction `(:direction ,direction) '())
+                   ,@(if margin `(:margin ,margin) '()))
            slideview--settings))))
 
-(defun slideview-get-setting (base-file)
-  (let ((key (directory-file-name base-file)))
-    ;;TODO case
-    (assoc key slideview--settings)))
+(defun* slideview-modify-match-setting (regexp &key margin direction)
+  "Modify new slideview settings of REGEXP to match filename.
+
+:margin controls pixel margin between two sequenced images.
+:direction controls slide direction of image files.
+"
+  (unless (or (null direction) (memq direction '(left right bottom)))
+    (signal 'args-out-of-range (list direction)))
+  (unless (or (null margin) (numberp margin))
+    (signal 'wrong-type-argument (list margin)))
+  (let ((setting (slideview-get-match-setting regexp)))
+    (when setting
+      (setq slideview--settings (delq setting slideview--settings)))
+    (setq slideview--settings
+          (cons
+           `(:regexp ,regexp
+                     ,@(if direction `(:direction ,direction) '())
+                     ,@(if margin `(:margin ,margin) '()))
+           slideview--settings))))
 
 (defun* slideview-add-matched-file (directory regexp &key margin direction)
   "Add new slideview settings of DIRECTORY files that match to REGEXP.
@@ -212,12 +231,39 @@ See `slideview-modify-setting' more information.
 "
   (cond
    ((file-directory-p directory)
-    (mapc
-     (lambda (f)
-       (when (file-directory-p f)
-         (slideview-modify-setting f :margin margin :direction direction)))
-     (directory-files directory t regexp))))
+    (dolist (f (directory-files directory t regexp))
+      (when (file-directory-p f)
+        (slideview-modify-setting f :margin margin :direction direction)))))
   slideview--settings)
+
+(defun slideview-read-direction ()
+  (let ((str (completing-read "Direction: " 
+                              '("left" "right" "bottom") nil t)))
+    (intern str)))
+
+(defun slideview-get-match-setting (regexp)
+  (loop for s in slideview--settings
+        if (and (plist-get s :regexp)
+                (equal (plist-get s :regexp) regexp))
+        return s))
+
+(defun slideview-get-setting (base-file)
+  (let ((key (directory-file-name base-file)))
+    (or
+     (loop for s in slideview--settings
+           if (or (and (stringp (car s))
+                       (string= (car s) key))
+                  (equal (plist-get s :file) key))
+           return s)
+     (loop with max-item
+           with max-len
+           for s in slideview--settings
+           if (ignore-errors
+                (and (string-match (plist-get s :regexp) key)
+                     (or (null max-len) (> (match-end 0) max-len))))
+           do (setq max-len (match-end 0)
+                    max-item s)
+           finally return max-item))))
 
 (defclass slideview-context ()
   ((buffers :type list
@@ -254,10 +300,16 @@ See `slideview-modify-setting' more information.
                 (make-instance slideview-directory-context))))
          (setting (slideview-get-setting (oref ctx base-file))))
     (when setting
-      (mapc
-       (lambda (x)
-         (eieio-oset ctx (car x) (cdr x)))
-       (cdr setting)))
+      (cond
+       ((stringp (car setting))
+        ;; for old version
+        (mapc
+         (lambda (x)
+           (eieio-oset ctx (car x) (cdr x)))
+         (cdr setting)))
+       (t
+        (eieio-oset ctx 'margin (plist-get setting :margin))
+        (eieio-oset ctx 'direction (plist-get setting :direction)))))
     ctx))
 
 (defun slideview--step (&optional reverse-p)
@@ -309,7 +361,7 @@ See `slideview-modify-setting' more information.
     (car (cdr (member now items)))))
 
 (defmacro slideview-save-buffer (&rest body)
-  (let ((prev (gensym "prev")))
+  (let ((prev (make-symbol "prev")))
     `(let ((,prev (current-buffer)))
        (unwind-protect
            (progn ,@body)
