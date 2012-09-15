@@ -84,6 +84,16 @@
   :group 'slideview
   :type 'float)
 
+(defcustom slideview-next-file-hook nil
+  "Hooks run after step to next file"
+  :group 'slideview
+  :type 'hook)
+
+(defcustom slideview-prev-file-hook nil
+  "Hooks run after step to previous file"
+  :group 'slideview
+  :type 'hook)
+
 (defun slideview-next-file ()
   "View next file (have same extension, sorted by string order)"
   (interactive)
@@ -319,8 +329,14 @@ See `slideview-modify-setting' more information.
     (if reverse-p
         (bury-buffer prev)
       (slideview--kill-buffer prev))
-    (when next
-      (switch-to-buffer next))
+    (cond
+     ((not next))
+     (reverse-p
+      (switch-to-buffer next)
+      (run-hooks 'slideview-prev-file-hook))
+     (t
+      (switch-to-buffer next)
+      (run-hooks 'slideview-next-file-hook)))
     (unless reverse-p
       (slideview--prefetch))))
 
@@ -617,7 +633,8 @@ See `slideview-modify-setting' more information.
     (add-hook 'kill-buffer-hook 'slideview--cleanup nil t)
     (setq slideview--context
           (or slideview--next-context
-              (slideview-new-context))))
+              (slideview-new-context)))
+    (run-hooks 'slideview-next-file-hook))
    (t
     (remove-hook 'kill-buffer-hook 'slideview--cleanup t)
     (when slideview--context
@@ -691,30 +708,52 @@ See `slideview-modify-setting' more information.
                      (hei (+ (/ pixel (frame-char-height)) 5)))
                 (setq win (split-window nil (- ih hei)))))))
           (when win
-            (let ((thumb-buf (slideview-image-prepare-thumbnail-buffer))
+            (let ((thumb-buf (slideview-image-prepare-thumb-buffer))
                   ;;TODO only directory context
-                  (files (oref slideview--context files)))
+                  (files (oref slideview--context files))
+                  (file buffer-file-name))
               (when thumb-buf
                 ;;TODO
                 (require 'image-dired+)
-                (imagex-dired-show-image-thumbnails thumb-buf files)
-                (set-window-buffer win thumb-buf)
-                (slideview-image-set-thumbnail-cursor buffer-file-name))))
+                (with-current-buffer thumb-buf
+                  (imagex-dired-show-image-thumbnails thumb-buf files)
+                  (set-window-buffer win thumb-buf)
+                  ;;TODO
+                  ;; (slideview-thumb-set-cursor file)
+                  ))))
           (setq slideview-thumbnail-window win))))))
 
-(defvar slideview-image-thumb-context)
-(defun slideview-image-prepare-thumbnail-buffer ()
+(defvar slideview-thumb--plist nil)
+(make-variable-buffer-local 'slideview-thumb--plist)
+
+(defun slideview-image-prepare-thumb-buffer ()
   (let ((buf (get-buffer-create " *slideview thumb* "))
         (context slideview--context))
     (with-current-buffer buf
-      (unless (and (boundp 'slideview-image-thumb-context)
-                   (eq (symbol-value 'slideview-image-thumb-context) context))
-        (set (make-local-variable 'slideview-image-thumb-context) context)
+      (unless slideview-thumb--plist
+        (setq slideview-thumb--plist
+              (list :context nil :active-image nil)))
+      (unless (eq (plist-get slideview-thumb--plist :context) context)
+        (plist-put slideview-thumb--plist :context context)
         buf))))
 
-(defun slideview-image-set-thumbnail-cursor (file)
-  ;; TODO
-  (get-text-property (point) 'original-file-name))
+(defun slideview-thumb-set-cursor (file)
+  ;; TODO about async image-dired
+  (let ((first (point)))
+    (goto-char (point-min))
+    (let ((image (catch 'done
+                   (while (not (eobp))
+                     (let ((cur (get-text-property (point) 'original-file-name)))
+                       (when (equal cur file)
+                         (throw 'done (get-text-property (point) 'display)))
+                       (let ((next (point)))
+                         (while (and (not (eobp))
+                                     (setq next (next-single-property-change next 'original-file-name))
+                                     (not (get-text-property next 'original-file-name))))
+                         (unless next
+                           (throw 'done nil))
+                         (goto-char next)))))))
+      (plist-put (cdr image) :background "red"))))
 
 (provide 'slideview)
 
