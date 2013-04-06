@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: slideshow
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.5.2
+;; Version: 0.5.3
 ;; Package-Requires: ()
 
 ;; This program is free software; you can redistribute it and/or
@@ -42,12 +42,10 @@
 ;; * Backspace
 ;;   Move backward slideview
 
-;; * C-c C-i (Work only in `image-mode')
-;;   Concat current image with next image.
+;; * C-c C-i, C-c C-p (Work only in `image-mode')
+;;   Concat current image with next/previous image.
 ;;   To indicate the viewing file direction, please use
 ;;   `slideview-modify-setting' or `slideview-add-matched-file'
-
-;;TODO M-x slideview-mode
 
 ;; todo
 ;; 1. open any file. (C-x C-f)
@@ -62,7 +60,7 @@
 ;;; TODO:
 ;; * use view-exit-action
 ;; * when directory contains numbered file
-;;   1.xml 10.xml 2.xml
+;;   1.jpg 10.jpg 2.jpg
 ;; * can include subdirectory
 ;; * look ahead (more sophisticated)
 
@@ -83,6 +81,11 @@
   "*Interval seconds to next file when slideshow is activated."
   :group 'slideview
   :type 'float)
+
+(defcustom slideview-move-file-hook nil
+  "Hooks run after step to next/previous file"
+  :group 'slideview
+  :type 'hook)
 
 (defcustom slideview-next-file-hook nil
   "Hooks run after step to next file"
@@ -105,7 +108,9 @@
   (slideview--step t))
 
 (defcustom slideview-prefetch-count 2
-  "*Number of count prefetching slideshow files.")
+  "*Number of count prefetching slideshow files."
+  :group 'slideview
+  :type 'integer)
 
 (defun slideview--prefetch-background (buffer context &optional count)
   "FUNC must receive one arg and return next buffer.
@@ -193,6 +198,7 @@ See `slideview-modify-setting' about this settings.
 (defvar slideview--settings nil)
 
 ;;TODO add sample of settings
+;;;###autoload
 (defun* slideview-modify-setting (base-file &key margin direction)
   "Modify new slideview settings of BASE-FILE.
 BASE-FILE is directory or *.tar file or *.zip filename.
@@ -214,6 +220,7 @@ BASE-FILE is directory or *.tar file or *.zip filename.
                    ,@(if margin `(:margin ,margin) '()))
            slideview--settings))))
 
+;;;###autoload
 (defun* slideview-modify-match-setting (regexp &key margin direction)
   "Modify new slideview settings of REGEXP to match filename.
 
@@ -234,6 +241,7 @@ BASE-FILE is directory or *.tar file or *.zip filename.
                      ,@(if margin `(:margin ,margin) '()))
            slideview--settings))))
 
+;;;###autoload
 (defun* slideview-add-matched-file (directory regexp &key margin direction)
   "Add new slideview settings of DIRECTORY files that match to REGEXP.
 
@@ -333,10 +341,12 @@ See `slideview-modify-setting' more information.
      ((not next))
      (reverse-p
       (switch-to-buffer next)
-      (run-hooks 'slideview-prev-file-hook))
+      (run-hooks 'slideview-prev-file-hook)
+      (run-hooks 'slideview-move-file-hook))
      (t
       (switch-to-buffer next)
-      (run-hooks 'slideview-next-file-hook)))
+      (run-hooks 'slideview-next-file-hook)
+      (run-hooks 'slideview-move-file-hook)))
     (unless reverse-p
       (slideview--prefetch))))
 
@@ -373,8 +383,15 @@ See `slideview-modify-setting' more information.
    (or context slideview--context)))
 
 (defun slideview--next-item (now items reverse-p)
-  (let ((items (if reverse-p (reverse items) items)))
-    (car (cdr (member now items)))))
+  (let ((items (if reverse-p (reverse items) items))
+        (pred (if reverse-p 
+                  (lambda (x y)
+                    (and (not (string= x y))
+                         (not (string-lessp x y))))
+                  'string-lessp)))
+    (loop for item in items
+          if (funcall pred now item)
+          return item)))
 
 ;;
 ;; for directory files
@@ -412,10 +429,6 @@ See `slideview-modify-setting' more information.
 
 (defun slideview--view-file (file)
   (view-file file)
-  ;; force to `view-mode'
-  ;; because `image-mode' `mode-class' is `special' (TODO why?)
-  (unless view-mode
-    (view-mode 1))
   (current-buffer))
 
 ;;
@@ -556,11 +569,11 @@ See `slideview-modify-setting' more information.
                   (find-file-noselect archive))))))))
 
 ;;
-;; slideshow TODO test
+;; slideshow testing
 ;;
 
+;; only one slideshow in one emacs process?
 (defvar slideview--slideshow-timer nil)
-;;TODO only one slideshow in one emacs process?
 (make-variable-buffer-local 'slideview--slideshow-timer)
 
 (defun slideview-toggle-slideshow ()
@@ -575,9 +588,13 @@ See `slideview-modify-setting' more information.
     (slideview-start-slideshow)
     (message "Starting slideshow..."))))
 
-;; TODO accept interval
-(defun slideview-start-slideshow ()
-  (interactive)
+(defun slideview-start-slideshow (&optional interval)
+  "Start slideshow in current `slideview--context'"
+  (interactive
+   (let (interval)
+     (when current-prefix-arg
+       (setq interval (read-number "Interval: ")))
+     (list interval)))
   (setq slideview--slideshow-timer
         (run-with-timer slideview-slideshow-interval nil
                         (slideview--slideshow-next (current-buffer)))))
@@ -616,6 +633,7 @@ See `slideview-modify-setting' more information.
 
     (setq slideview-mode-map map)))
 
+;;;###autoload
 (define-minor-mode slideview-mode
   ""
   :init-value nil
@@ -626,8 +644,7 @@ See `slideview-modify-setting' more information.
     (add-hook 'kill-buffer-hook 'slideview--cleanup nil t)
     (setq slideview--context
           (or slideview--next-context
-              (slideview-new-context)))
-    (run-hooks 'slideview-next-file-hook))
+              (slideview-new-context))))
    (t
     (remove-hook 'kill-buffer-hook 'slideview--cleanup t)
     (when slideview--context
@@ -653,12 +670,12 @@ See `slideview-modify-setting' more information.
 
 (defun slideview-sequence-lessp (x1 x2)
   (let ((l1 (length x1))
-              (l2 (length x2)))
-        (cond
-         ((> l2 l1) t)
-         ((< l2 l1) nil)
-         (t
-          (string-lessp x1 x2)))))
+        (l2 (length x2)))
+    (cond
+     ((> l2 l1) t)
+     ((< l2 l1) nil)
+     (t
+      (string-lessp x1 x2)))))
 
 (provide 'slideview)
 
