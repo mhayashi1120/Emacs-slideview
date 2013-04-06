@@ -255,7 +255,7 @@ See `slideview-modify-setting' more information.
   slideview--settings)
 
 (defun slideview-read-direction ()
-  (let ((str (completing-read "Direction: " 
+  (let ((str (completing-read "Direction: "
                               '("left" "right" "bottom") nil t)))
     (intern str)))
 
@@ -384,7 +384,7 @@ See `slideview-modify-setting' more information.
 
 (defun slideview--next-item (now items reverse-p)
   (let ((items (if reverse-p (reverse items) items))
-        (pred (if reverse-p 
+        (pred (if reverse-p
                   (lambda (x y)
                     (and (not (string= x y))
                          (not (string-lessp x y))))
