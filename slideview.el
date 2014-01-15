@@ -1,9 +1,10 @@
 ;;; slideview.el --- File slideshow
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
-;; Keywords: slideshow
+;; URL: https://github.com/mhayashi1120/Emacs-slideview/raw/master/slideview.el
+;; Keywords: files
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.6.0
+;; Version: 0.6.1
 ;; Package-Requires: ()
 
 ;; This program is free software; you can redistribute it and/or
@@ -303,17 +304,17 @@ See `slideview-modify-setting' more information.
                (t
                 (make-instance slideview-directory-context))))
          (setting (slideview-get-setting (oref ctx base-file))))
-    (when setting
-      (cond
-       ((stringp (car setting))
-        ;; for old version
-        (mapc
-         (lambda (x)
-           (eieio-oset ctx (car x) (cdr x)))
-         (cdr setting)))
-       (t
-        (eieio-oset ctx 'margin (plist-get setting :margin))
-        (eieio-oset ctx 'direction (plist-get setting :direction)))))
+    (cond
+     ((not setting))
+     ((stringp (car setting))
+      ;; for old version
+      (mapc
+       (lambda (x)
+         (eieio-oset ctx (car x) (cdr x)))
+       (cdr setting)))
+     (t
+      (eieio-oset ctx 'margin (plist-get setting :margin))
+      (eieio-oset ctx 'direction (plist-get setting :direction))))
     ctx))
 
 (defun slideview--step (&optional reverse-p)
@@ -663,11 +664,17 @@ See `slideview-modify-setting' more information.
   :keymap slideview-mode-map
   (cond
    (slideview-mode
-    (add-hook 'after-revert-hook 'slideview--revert nil t)
-    (add-hook 'kill-buffer-hook 'slideview--cleanup nil t)
-    (setq slideview--context
-          (or slideview--next-context
-              (slideview-new-context))))
+    (condition-case err
+        (progn
+          (add-hook 'after-revert-hook 'slideview--revert nil t)
+          (add-hook 'kill-buffer-hook 'slideview--cleanup nil t)
+          (setq slideview--context
+                (or slideview--next-context
+                    (slideview-new-context))))
+      (error
+       ;; fallback
+       (message "%s" err)
+       (slideview-mode -1))))
    (t
     (remove-hook 'after-revert-hook 'slideview--revert t)
     (remove-hook 'kill-buffer-hook 'slideview--cleanup t)
