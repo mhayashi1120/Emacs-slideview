@@ -30,7 +30,6 @@
 ;; (add-hook 'image-mode-hook 'slideview-mode)
 
 ;;; Commentary:
-;;
 
 ;; * Slideview settings for file.zip
 ;;
@@ -43,7 +42,7 @@
 ;; * Backspace
 ;;   Move backward slideview
 
-;; * C-c C-i, C-c C-p (Work only in `image-mode')
+;; * `C-c C-i` / `C-c C-p` (Work only in `image-mode')
 ;;   Concat current image with next/previous image.
 ;;   To indicate the viewing file direction, please use
 ;;   `slideview-modify-setting' or `slideview-add-matched-file'
@@ -84,16 +83,6 @@
   :group 'slideview
   :type 'hook)
 
-(defun slideview-next-file ()
-  "View next file (have same extension, sorted by string order)"
-  (interactive)
-  (slideview--step))
-
-(defun slideview-prev-file ()
-  "View next file (have same extension, sorted by reverse string order)"
-  (interactive)
-  (slideview--step t))
-
 (defcustom slideview-prefetch-count 2
   "Number of count prefetching slideshow files."
   :group 'slideview
@@ -116,44 +105,6 @@ That arg is CONTEXT."
             (when (> remain 0)
               (slideview--prefetch-background
                next ctx (1- remain)))))))))
-
-(defun slideview-concat-prev-if-image (&optional direction)
-  "Reopen the previous image file with concatenate current image.
-
-See `slideview-modify-setting' about this settings.
-"
-  (interactive (if current-prefix-arg
-                   (list (slideview-read-direction))))
-  (unless (derived-mode-p 'image-mode)
-    (error "Not a `image-mode'"))
-  (let* ((context slideview--context)
-         (prev (let ((buf (slideview--find-next context t)))
-                 (and buf
-                      (prog1
-                          (with-current-buffer buf
-                            (image-get-display-property))
-                        (slideview--kill-buffer buf))))))
-    (unless prev
-      (error "No more previous image"))
-    (slideview-concat-image
-     prev (oref context margin)
-     (or direction (oref context direction)))))
-
-(defun slideview-concat-next-if-image (&optional direction)
-  "Open the next image file with concatenate current image.
-
-See `slideview-modify-setting' about this settings.
-"
-  (interactive (if current-prefix-arg
-                   (list (slideview-read-direction))))
-  (unless (derived-mode-p 'image-mode)
-    (error "Not a `image-mode'"))
-  (let ((prev (image-get-display-property))
-        (context slideview--context))
-    (slideview--step)
-    (slideview-concat-image
-     prev (oref context margin)
-     (or direction (oref context direction)))))
 
 (defun slideview-concat-image (prev margin direction)
   (unless (memq direction '(bottom left right))
@@ -283,37 +234,6 @@ See `slideview-modify-setting' more information.
 (make-variable-buffer-local 'slideview--context)
 
 (defvar slideview--next-context nil)
-
-(defun slideview-new-context ()
-  (unless buffer-file-name
-    (error "Not a file buffer"))
-  (let* ((ctx (cond
-               ((and (boundp 'archive-subfile-mode)
-                     archive-subfile-mode)
-                (make-instance slideview-archive-context))
-               ((and (boundp 'tar-buffer)
-                     ;; FIXME tar-buffer is `let' bind local-variable
-                     ;;   defined at `tar-extract'
-                     tar-buffer)
-                (make-instance slideview-tar-context))
-               ;;TODO
-               ;; ((derived-mode-p 'doc-view-mode)
-               ;;  (make-instance slideview-pdf-context))
-               (t
-                (make-instance slideview-directory-context))))
-         (setting (slideview-get-setting (oref ctx base-file))))
-    (cond
-     ((not setting))
-     ((stringp (car setting))
-      ;; for old version
-      (mapc
-       (lambda (x)
-         (eieio-oset ctx (car x) (cdr x)))
-       (cdr setting)))
-     (t
-      (eieio-oset ctx 'margin (plist-get setting :margin))
-      (eieio-oset ctx 'direction (plist-get setting :direction))))
-    ctx))
 
 (defun slideview--step (&optional reverse-p)
   (let* ((context slideview--context)
@@ -590,55 +510,6 @@ See `slideview-modify-setting' more information.
                   (find-file-noselect archive))))))))
 
 ;;
-;; TESTING: slideshow
-;;
-
-;; only one slideshow in one emacs process?
-(defvar slideview--slideshow-timer nil)
-(make-variable-buffer-local 'slideview--slideshow-timer)
-
-(defun slideview-toggle-slideshow ()
-  (interactive)
-  (cond
-   ((and slideview--slideshow-timer
-         (timerp slideview--slideshow-timer))
-    (cancel-timer slideview--slideshow-timer)
-    (setq slideview--slideshow-timer nil)
-    (message "Slideshow is stopped."))
-   (t
-    (slideview-start-slideshow)
-    (message "Starting slideshow..."))))
-
-(defun slideview-start-slideshow (&optional interval)
-  "Start slideshow in current `slideview--context'"
-  (interactive
-   (let (interval)
-     (when current-prefix-arg
-       (setq interval (read-number "Interval: ")))
-     (list interval)))
-  (setq slideview--slideshow-timer
-        (run-with-timer slideview-slideshow-interval nil
-                        (slideview--slideshow-next (current-buffer)))))
-
-;;TODO switch to other buffer after start.
-;;TODO when step to backward
-(defun slideview--slideshow-next (buffer)
-  `(lambda ()
-     (condition-case nil
-         (progn
-           (when (buffer-live-p ,buffer)
-             ;;TODO
-             (save-window-excursion
-               (with-current-buffer ,buffer
-                 (slideview-next-file)
-                 ;;TODO how to start new timer before slide to next
-                 (slideview-start-slideshow)))))
-       ;;TODO restrict by signal type
-       (error
-        (when (buffer-live-p ,buffer)
-          (kill-buffer ,buffer))))))
-
-;;
 ;; Minor mode
 ;;
 
@@ -653,6 +524,37 @@ See `slideview-modify-setting' more information.
     (define-key map "\C-c\C-p" 'slideview-concat-prev-if-image)
 
     (setq slideview-mode-map map)))
+
+(defun slideview-new-context ()
+  (unless buffer-file-name
+    (error "Not a file buffer"))
+  (let* ((ctx (cond
+               ((and (boundp 'archive-subfile-mode)
+                     archive-subfile-mode)
+                (make-instance slideview-archive-context))
+               ((and (boundp 'tar-buffer)
+                     ;; FIXME tar-buffer is `let' bind local-variable
+                     ;;   defined at `tar-extract'
+                     tar-buffer)
+                (make-instance slideview-tar-context))
+               ;;TODO
+               ;; ((derived-mode-p 'doc-view-mode)
+               ;;  (make-instance slideview-pdf-context))
+               (t
+                (make-instance slideview-directory-context))))
+         (setting (slideview-get-setting (oref ctx base-file))))
+    (cond
+     ((not setting))
+     ((stringp (car setting))
+      ;; for old version
+      (mapc
+       (lambda (x)
+         (eieio-oset ctx (car x) (cdr x)))
+       (cdr setting)))
+     (t
+      (eieio-oset ctx 'margin (plist-get setting :margin))
+      (eieio-oset ctx 'direction (plist-get setting :direction))))
+    ctx))
 
 ;;;###autoload
 (define-minor-mode slideview-mode
@@ -705,6 +607,107 @@ See `slideview-modify-setting' more information.
 
 (defun slideview-sort-items (items)
   (sort items 'string-lessp))
+
+;;
+;; Commands
+;;
+
+(defun slideview-next-file ()
+  "View next file (have same extension, sorted by string order)"
+  (interactive)
+  (slideview--step))
+
+(defun slideview-prev-file ()
+  "View next file (have same extension, sorted by reverse string order)"
+  (interactive)
+  (slideview--step t))
+
+(defun slideview-concat-prev-if-image (&optional direction)
+  "Reopen the previous image file with concatenate current image.
+
+See `slideview-modify-setting' about this settings.
+"
+  (interactive (if current-prefix-arg
+                   (list (slideview-read-direction))))
+  (unless (derived-mode-p 'image-mode)
+    (error "Not a `image-mode'"))
+  (let* ((context slideview--context)
+         (prev (let ((buf (slideview--find-next context t)))
+                 (and buf
+                      (prog1
+                          (with-current-buffer buf
+                            (image-get-display-property))
+                        (slideview--kill-buffer buf))))))
+    (unless prev
+      (error "No more previous image"))
+    (slideview-concat-image
+     prev (oref context margin)
+     (or direction (oref context direction)))))
+
+(defun slideview-concat-next-if-image (&optional direction)
+  "Open the next image file with concatenate current image.
+
+See `slideview-modify-setting' about this settings.
+"
+  (interactive (if current-prefix-arg
+                   (list (slideview-read-direction))))
+  (unless (derived-mode-p 'image-mode)
+    (error "Not a `image-mode'"))
+  (let ((prev (image-get-display-property))
+        (context slideview--context))
+    (slideview--step)
+    (slideview-concat-image
+     prev (oref context margin)
+     (or direction (oref context direction)))))
+
+;;
+;; TESTING: slideshow
+;;
+
+;; only one slideshow in one emacs process?
+(defvar slideview--slideshow-timer nil)
+(make-variable-buffer-local 'slideview--slideshow-timer)
+
+;;TODO switch to other buffer after start.
+;;TODO when step to backward
+(defun slideview--slideshow-next (buffer)
+  `(lambda ()
+     (condition-case nil
+         (progn
+           (when (buffer-live-p ,buffer)
+             ;;TODO
+             (save-window-excursion
+               (with-current-buffer ,buffer
+                 (slideview-next-file)
+                 ;;TODO how to start new timer before slide to next
+                 (slideview-start-slideshow)))))
+       ;;TODO restrict by signal type
+       (error
+        (when (buffer-live-p ,buffer)
+          (kill-buffer ,buffer))))))
+
+(defun slideview-toggle-slideshow ()
+  (interactive)
+  (cond
+   ((and slideview--slideshow-timer
+         (timerp slideview--slideshow-timer))
+    (cancel-timer slideview--slideshow-timer)
+    (setq slideview--slideshow-timer nil)
+    (message "Slideshow is stopped."))
+   (t
+    (slideview-start-slideshow)
+    (message "Starting slideshow..."))))
+
+(defun slideview-start-slideshow (&optional interval)
+  "Start slideshow in current `slideview--context'"
+  (interactive
+   (let (interval)
+     (when current-prefix-arg
+       (setq interval (read-number "Interval: ")))
+     (list interval)))
+  (setq slideview--slideshow-timer
+        (run-with-timer slideview-slideshow-interval nil
+                        (slideview--slideshow-next (current-buffer)))))
 
 (provide 'slideview)
 
