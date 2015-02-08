@@ -24,7 +24,7 @@
 
 ;;; Commentary:
 
-;; View sequential files with with simple operation.
+;; View sequential files with simple operation.
 
 ;; ## Install:
 
