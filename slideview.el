@@ -134,63 +134,6 @@ That arg is CONTEXT."
 
 (defvar slideview--settings nil)
 
-;;TODO add sample of settings
-;;;###autoload
-(cl-defun slideview-modify-setting (base-file &key margin direction)
-  "Modify new slideview settings of BASE-FILE.
-BASE-FILE is directory or *.tar file or *.zip filename.
-
-:margin controls pixel margin between two sequenced images.
-:direction controls slide direction of image files.
-"
-  (unless (or (null direction) (memq direction '(left right bottom)))
-    (signal 'args-out-of-range (list direction)))
-  (unless (or (null margin) (numberp margin))
-    (signal 'wrong-type-argument (list margin)))
-  (let ((setting (slideview-get-setting base-file)))
-    (when setting
-      (setq slideview--settings (delq setting slideview--settings)))
-    (setq slideview--settings
-          (cons
-           `(:file ,(directory-file-name base-file)
-                   ,@(if direction `(:direction ,direction) '())
-                   ,@(if margin `(:margin ,margin) '()))
-           slideview--settings))))
-
-;;;###autoload
-(cl-defun slideview-modify-match-setting (regexp &key margin direction)
-  "Modify new slideview settings of REGEXP to match filename.
-
-:margin controls pixel margin between two sequenced images.
-:direction controls slide direction of image files.
-"
-  (unless (or (null direction) (memq direction '(left right bottom)))
-    (signal 'args-out-of-range (list direction)))
-  (unless (or (null margin) (numberp margin))
-    (signal 'wrong-type-argument (list margin)))
-  (let ((setting (slideview-get-match-setting regexp)))
-    (when setting
-      (setq slideview--settings (delq setting slideview--settings)))
-    (setq slideview--settings
-          (cons
-           `(:regexp ,regexp
-                     ,@(if direction `(:direction ,direction) '())
-                     ,@(if margin `(:margin ,margin) '()))
-           slideview--settings))))
-
-;;;###autoload
-(cl-defun slideview-add-matched-file (directory regexp &key margin direction)
-  "Add new slideview settings of DIRECTORY files that match to REGEXP.
-
-See `slideview-modify-setting' more information.
-"
-  (cond
-   ((file-directory-p directory)
-    (dolist (f (directory-files directory t regexp))
-      (when (file-directory-p f)
-        (slideview-modify-setting f :margin margin :direction direction)))))
-  slideview--settings)
-
 (defun slideview-read-direction ()
   (let ((str (completing-read "Direction: "
                               '("left" "right" "bottom") nil t)))
@@ -235,6 +178,12 @@ See `slideview-modify-setting' more information.
 
 (defvar slideview--next-context nil)
 
+(defun slideview--kill-buffer (buffer)
+  "Kill BUFFER suppress `slideview--cleanup' execution."
+  (with-current-buffer buffer
+    (remove-hook 'kill-buffer-hook 'slideview--cleanup t))
+  (kill-buffer buffer))
+
 (defun slideview--step (&optional reverse-p)
   (let* ((context slideview--context)
          (prev (current-buffer))
@@ -254,12 +203,6 @@ See `slideview-modify-setting' more information.
       (run-hooks 'slideview-move-file-hook)))
     (unless reverse-p
       (slideview--prefetch))))
-
-(defun slideview--kill-buffer (buffer)
-  "Kill BUFFER suppress `slideview--cleanup' execution."
-  (with-current-buffer buffer
-    (remove-hook 'kill-buffer-hook 'slideview--cleanup t))
-  (kill-buffer buffer))
 
 (defun slideview--find-next (context reverse-p &optional no-error)
   (let* (
@@ -384,6 +327,26 @@ See `slideview-modify-setting' more information.
   "Slideshow context for `tar-mode'"
   )
 
+(defun slideview--tar-view-file (file)
+  (or
+   (let* ((name (concat buffer-file-name "!" file))
+          (buf (get-file-buffer name)))
+     (when buf
+       (switch-to-buffer buf)
+       buf))
+   (let ((first (point))
+         desc)
+     (goto-char (point-min))
+     (catch 'done
+       (while (setq desc (tar-current-descriptor))
+         (when (string= (tar-header-name desc) file)
+           (tar-extract 'view)
+           (throw 'done (current-buffer)))
+         (tar-next-line 1))
+       ;; not found. restore the previous point
+       (goto-char first)
+       (error "%s not found" file)))))
+
 (defmethod initialize-instance ((this slideview-tar-context) &rest fields)
   (call-next-method)
   (slideview--load-context this))
@@ -421,26 +384,6 @@ See `slideview-modify-setting' more information.
                      ;; Open archive buffer with no confirmation
                      (find-file-noselect archive))))))))
 
-(defun slideview--tar-view-file (file)
-  (or
-   (let* ((name (concat buffer-file-name "!" file))
-          (buf (get-file-buffer name)))
-     (when buf
-       (switch-to-buffer buf)
-       buf))
-   (let ((first (point))
-         desc)
-     (goto-char (point-min))
-     (catch 'done
-       (while (setq desc (tar-current-descriptor))
-         (when (string= (tar-header-name desc) file)
-           (tar-extract 'view)
-           (throw 'done (current-buffer)))
-         (tar-next-line 1))
-       ;; not found. restore the previous point
-       (goto-char first)
-       (error "%s not found" file)))))
-
 ;;
 ;; for archive-mode
 ;;
@@ -460,6 +403,26 @@ See `slideview-modify-setting' more information.
    )
   "Slideshow context for `archive-mode'"
   )
+
+(defun slideview--archive-view-file (file)
+  (or
+   (let* ((name (concat buffer-file-name ":" file))
+          (buf (get-file-buffer name)))
+     (when buf
+       (switch-to-buffer buf)
+       buf))
+   (let ((first (point))
+         desc)
+     (goto-char archive-file-list-start)
+     (catch 'done
+       (while (setq desc (archive-get-descr t))
+         (when (string= (aref desc 0) file)
+           (archive-view)
+           (throw 'done (current-buffer)))
+         (archive-next-line 1))
+       ;; not found. restore the previous point
+       (goto-char first)
+       (error "%s not found" file)))))
 
 (defmethod initialize-instance ((this slideview-archive-context) &rest fields)
   (call-next-method)
@@ -482,26 +445,6 @@ See `slideview-modify-setting' more information.
       (with-current-buffer superior
         (save-window-excursion
           (slideview--archive-view-file next))))))
-
-(defun slideview--archive-view-file (file)
-  (or
-   (let* ((name (concat buffer-file-name ":" file))
-          (buf (get-file-buffer name)))
-     (when buf
-       (switch-to-buffer buf)
-       buf))
-   (let ((first (point))
-         desc)
-     (goto-char archive-file-list-start)
-     (catch 'done
-       (while (setq desc (archive-get-descr t))
-         (when (string= (aref desc 0) file)
-           (archive-view)
-           (throw 'done (current-buffer)))
-         (archive-next-line 1))
-       ;; not found. restore the previous point
-       (goto-char first)
-       (error "%s not found" file)))))
 
 (defmethod slideview--superior-buffer ((context slideview-archive-context))
   (or
@@ -533,6 +476,20 @@ See `slideview-modify-setting' more information.
     (define-key map "\C-c\C-p" 'slideview-concat-prev-if-image)
 
     (setq slideview-mode-map map)))
+
+(defun slideview--cleanup ()
+  (condition-case nil
+      (dolist (b (oref slideview--context buffers))
+        ;; save the current buffer
+        (and (not (eq (current-buffer) b))
+             (buffer-live-p b)
+             (slideview--kill-buffer b)))
+    (error nil)))
+
+(defun slideview--revert ()
+  (condition-case nil
+      (slideview--load-context slideview--context)
+    (error nil)))
 
 (defun slideview--new-context ()
   (unless buffer-file-name
@@ -590,19 +547,62 @@ See `slideview-modify-setting' more information.
     (when slideview--context
       (slideview--cleanup)))))
 
-(defun slideview--cleanup ()
-  (condition-case nil
-      (dolist (b (oref slideview--context buffers))
-        ;; save the current buffer
-        (and (not (eq (current-buffer) b))
-             (buffer-live-p b)
-             (slideview--kill-buffer b)))
-    (error nil)))
+;;TODO add sample of settings
+;;;###autoload
+(cl-defun slideview-modify-setting (base-file &key margin direction)
+  "Modify new slideview settings of BASE-FILE.
+BASE-FILE is directory or *.tar file or *.zip filename.
 
-(defun slideview--revert ()
-  (condition-case nil
-      (slideview--load-context slideview--context)
-    (error nil)))
+:margin controls pixel margin between two sequenced images.
+:direction controls slide direction of image files.
+"
+  (unless (or (null direction) (memq direction '(left right bottom)))
+    (signal 'args-out-of-range (list direction)))
+  (unless (or (null margin) (numberp margin))
+    (signal 'wrong-type-argument (list margin)))
+  (let ((setting (slideview-get-setting base-file)))
+    (when setting
+      (setq slideview--settings (delq setting slideview--settings)))
+    (setq slideview--settings
+          (cons
+           `(:file ,(directory-file-name base-file)
+                   ,@(if direction `(:direction ,direction) '())
+                   ,@(if margin `(:margin ,margin) '()))
+           slideview--settings))))
+
+;;;###autoload
+(cl-defun slideview-modify-match-setting (regexp &key margin direction)
+  "Modify new slideview settings of REGEXP to match filename.
+
+:margin controls pixel margin between two sequenced images.
+:direction controls slide direction of image files.
+"
+  (unless (or (null direction) (memq direction '(left right bottom)))
+    (signal 'args-out-of-range (list direction)))
+  (unless (or (null margin) (numberp margin))
+    (signal 'wrong-type-argument (list margin)))
+  (let ((setting (slideview-get-match-setting regexp)))
+    (when setting
+      (setq slideview--settings (delq setting slideview--settings)))
+    (setq slideview--settings
+          (cons
+           `(:regexp ,regexp
+                     ,@(if direction `(:direction ,direction) '())
+                     ,@(if margin `(:margin ,margin) '()))
+           slideview--settings))))
+
+;;;###autoload
+(cl-defun slideview-add-matched-file (directory regexp &key margin direction)
+  "Add new slideview settings of DIRECTORY files that match to REGEXP.
+
+See `slideview-modify-setting' more information.
+"
+  (cond
+   ((file-directory-p directory)
+    (dolist (f (directory-files directory t regexp))
+      (when (file-directory-p f)
+        (slideview-modify-setting f :margin margin :direction direction)))))
+  slideview--settings)
 
 ;;
 ;; Utilities
