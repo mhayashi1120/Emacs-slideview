@@ -445,6 +445,15 @@ See `slideview-modify-setting' more information.
 ;; for archive-mode
 ;;
 
+(defvar archive-file-list-start)
+(defvar archive-superior-buffer)
+(defvar archive-files)
+(defvar archive-subfile-mode)
+
+(declare-function archive-view "arc-mode")
+(declare-function archive-next-line "arc-mode")
+(declare-function archive-get-descr "arc-mode")
+
 (defclass slideview-archive-context (slideview-arcbase-context)
   (
    (paths :type list)
@@ -525,7 +534,7 @@ See `slideview-modify-setting' more information.
 
     (setq slideview-mode-map map)))
 
-(defun slideview-new-context ()
+(defun slideview--new-context ()
   (unless buffer-file-name
     (error "Not a file buffer"))
   (let* ((ctx (cond
@@ -570,7 +579,7 @@ See `slideview-modify-setting' more information.
           (add-hook 'kill-buffer-hook 'slideview--cleanup nil t)
           (setq slideview--context
                 (or slideview--next-context
-                    (slideview-new-context))))
+                    (slideview--new-context))))
       (error
        ;; fallback
        (message "%s" err)
@@ -621,6 +630,8 @@ See `slideview-modify-setting' more information.
   "View next file (have same extension, sorted by reverse string order)"
   (interactive)
   (slideview--step t))
+
+(declare-function image-get-display-property "image-mode")
 
 (defun slideview-concat-prev-if-image (&optional direction)
   "Reopen the previous image file with concatenate current image.
