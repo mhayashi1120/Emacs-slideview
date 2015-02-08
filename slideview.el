@@ -22,19 +22,19 @@
 ;; Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 ;; Boston, MA 02110-1301, USA.
 
-;;; Usage:
-;;
-;; (require 'slideview)
-;;
-;; Start slideview-mode automatically when open a image file.
-;; (add-hook 'image-mode-hook 'slideview-mode)
-
 ;;; Commentary:
 
-;; * Slideview settings for file.zip
-;;
-;; (slideview-modify-setting "/path/to/file.zip"
-;;     :margin 30 :direction 'right)
+;; View sequential files with with simple operation.
+
+;; ## Install:
+
+;;     (require 'slideview)
+
+;; Start slideview-mode automatically when open a image file.
+
+;;     (add-hook 'image-mode-hook 'slideview-mode)
+
+;; ## Usage:
 
 ;; * Space
 ;;   Move forward slideview
@@ -46,6 +46,11 @@
 ;;   Concat current image with next/previous image.
 ;;   To indicate the viewing file direction, please use
 ;;   `slideview-modify-setting' or `slideview-add-matched-file'
+
+;; * Slideview settings for file.zip
+;;
+;;     (slideview-modify-setting "/path/to/file.zip"
+;;                               :margin 30 :direction 'right)
 
 ;;; TODO:
 ;; * when directory contains numbered file
