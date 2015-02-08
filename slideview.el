@@ -372,7 +372,7 @@ See `slideview-modify-setting' more information.
 (defvar tar-superior-descriptor)
 (defvar tar-superior-buffer)
 
-(declare-function tar-header-name "tar-mode")
+(declare-function tar-header-name "tar-mode" (tar-header) t)
 (declare-function tar-current-descriptor "tar-mode")
 (declare-function tar-extract "tar-mode")
 (declare-function tar-next-line "tar-mode")
