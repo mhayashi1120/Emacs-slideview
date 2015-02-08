@@ -4,8 +4,8 @@
 ;; URL: https://github.com/mhayashi1120/Emacs-slideview/raw/master/slideview.el
 ;; Keywords: files
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.6.1
-;; Package-Requires: ()
+;; Version: 0.7.0
+;; Package-Requires: ((cl-lib "0.3"))
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -56,9 +56,7 @@
 
 ;;; Code:
 
-(eval-when-compile
-  (require 'cl))
-
+(require 'cl-lib)
 (require 'view)
 (require 'eieio)
 
@@ -187,7 +185,7 @@ See `slideview-modify-setting' about this settings.
 
 ;;TODO add sample of settings
 ;;;###autoload
-(defun* slideview-modify-setting (base-file &key margin direction)
+(cl-defun slideview-modify-setting (base-file &key margin direction)
   "Modify new slideview settings of BASE-FILE.
 BASE-FILE is directory or *.tar file or *.zip filename.
 
@@ -209,7 +207,7 @@ BASE-FILE is directory or *.tar file or *.zip filename.
            slideview--settings))))
 
 ;;;###autoload
-(defun* slideview-modify-match-setting (regexp &key margin direction)
+(cl-defun slideview-modify-match-setting (regexp &key margin direction)
   "Modify new slideview settings of REGEXP to match filename.
 
 :margin controls pixel margin between two sequenced images.
@@ -230,7 +228,7 @@ BASE-FILE is directory or *.tar file or *.zip filename.
            slideview--settings))))
 
 ;;;###autoload
-(defun* slideview-add-matched-file (directory regexp &key margin direction)
+(cl-defun slideview-add-matched-file (directory regexp &key margin direction)
   "Add new slideview settings of DIRECTORY files that match to REGEXP.
 
 See `slideview-modify-setting' more information.
@@ -248,28 +246,28 @@ See `slideview-modify-setting' more information.
     (intern str)))
 
 (defun slideview-get-match-setting (regexp)
-  (loop for s in slideview--settings
-        if (and (plist-get s :regexp)
-                (equal (plist-get s :regexp) regexp))
-        return s))
+  (cl-loop for s in slideview--settings
+           if (and (plist-get s :regexp)
+                   (equal (plist-get s :regexp) regexp))
+           return s))
 
 (defun slideview-get-setting (base-file)
   (let ((key (directory-file-name base-file)))
     (or
-     (loop for s in slideview--settings
-           if (or (and (stringp (car s))
-                       (string= (car s) key))
-                  (equal (plist-get s :file) key))
-           return s)
-     (loop with max-item
-           with max-len
-           for s in slideview--settings
-           if (ignore-errors
-                (and (string-match (plist-get s :regexp) key)
-                     (or (null max-len) (> (match-end 0) max-len))))
-           do (setq max-len (match-end 0)
-                    max-item s)
-           finally return max-item))))
+     (cl-loop for s in slideview--settings
+              if (or (and (stringp (car s))
+                          (string= (car s) key))
+                     (equal (plist-get s :file) key))
+              return s)
+     (cl-loop with max-item
+              with max-len
+              for s in slideview--settings
+              if (ignore-errors
+                   (and (string-match (plist-get s :regexp) key)
+                        (or (null max-len) (> (match-end 0) max-len))))
+              do (setq max-len (match-end 0)
+                       max-item s)
+              finally return max-item))))
 
 (defclass slideview-context ()
   ((buffers :type list
@@ -375,10 +373,10 @@ See `slideview-modify-setting' more information.
                   (lambda (x y)
                     (and (not (string= x y))
                          (not (string-lessp x y))))
-                  'string-lessp)))
-    (loop for item in items
-          if (funcall pred now item)
-          return item)))
+                'string-lessp)))
+    (cl-loop for item in items
+             if (funcall pred now item)
+             return item)))
 
 ;;
 ;; for directory files
@@ -542,8 +540,8 @@ See `slideview-modify-setting' more information.
   (with-current-buffer (slideview--find-superior-buffer context)
     (oset context paths
           (slideview-sort-items
-           (loop for f across archive-files
-                 collect (aref f 0))))))
+           (cl-loop for f across archive-files
+                    collect (aref f 0))))))
 
 (defmethod slideview--next-buffer ((context slideview-archive-context) reverse-p)
   (let* ((superior (slideview--find-superior-buffer context))
