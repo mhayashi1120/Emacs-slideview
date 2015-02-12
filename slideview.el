@@ -4,7 +4,7 @@
 ;; URL: https://github.com/mhayashi1120/Emacs-slideview/raw/master/slideview.el
 ;; Keywords: files
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.7.0
+;; Version: 0.7.1
 ;; Package-Requires: ((cl-lib "0.3"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -42,7 +42,7 @@
 ;; * Backspace
 ;;   Move backward slideview
 
-;; * `C-c C-i` / `C-c C-p` (Work only in `image-mode')
+;; * `C-c C-i` / `C-c C-M-i` (Work only in `image-mode')
 ;;   Concat current image with next/previous image.
 ;;   To indicate the viewing file direction, please use
 ;;   `slideview-modify-setting' or `slideview-add-matched-file'
@@ -193,21 +193,27 @@ That arg is CONTEXT."
   (let* ((context slideview--context)
          (prev (current-buffer))
          (next (slideview--find-next context reverse-p)))
-    (if reverse-p
-        (bury-buffer prev)
-      (slideview--kill-buffer prev))
-    (cond
-     ((not next))
-     (reverse-p
-      (switch-to-buffer next)
-      (run-hooks 'slideview-prev-file-hook)
-      (run-hooks 'slideview-move-file-hook))
-     (t
-      (switch-to-buffer next)
-      (run-hooks 'slideview-next-file-hook)
-      (run-hooks 'slideview-move-file-hook)))
-    (unless reverse-p
-      (slideview--prefetch))))
+    (slideview--step-internal prev next reverse-p)))
+
+(defun slideview--step-internal (prev next reverse-p)
+  (cond
+   ((null prev))
+   (reverse-p
+    (bury-buffer prev))
+   (t
+    (slideview--kill-buffer prev)))
+  (cond
+   ((null next))
+   (reverse-p
+    (switch-to-buffer next)
+    (run-hooks 'slideview-prev-file-hook)
+    (run-hooks 'slideview-move-file-hook))
+   (t
+    (switch-to-buffer next)
+    (run-hooks 'slideview-next-file-hook)
+    (run-hooks 'slideview-move-file-hook)))
+  (unless reverse-p
+    (slideview--prefetch)))
 
 (defun slideview--find-next (context reverse-p &optional no-error)
   (let* (
@@ -236,15 +242,8 @@ That arg is CONTEXT."
    (or context slideview--context)))
 
 (defun slideview--next-item (now items reverse-p)
-  (let ((items (if reverse-p (reverse items) items))
-        (pred (if reverse-p
-                  (lambda (x y)
-                    (and (not (string= x y))
-                         (not (string-lessp x y))))
-                'string-lessp)))
-    (cl-loop for item in items
-             if (funcall pred now item)
-             return item)))
+  (let ((items (if reverse-p (reverse items) items)))
+    (cadr (member now items))))
 
 ;;
 ;; for directory files
@@ -266,13 +265,14 @@ That arg is CONTEXT."
   (let* ((dir (oref context base-file))
          (files (directory-files dir nil "^\\(?:[^.]\\|\\.\\(?:[^.]\\|\\..\\)\\)")))
     (oset context files
-          (delq nil
-                (mapcar
-                 (lambda (x)
-                   ;; exclude directory
-                   (unless (eq (car (file-attributes x)) t)
-                     (expand-file-name x dir)))
-                 files)))))
+          (slideview-sort-items
+           (delq nil
+                 (mapcar
+                  (lambda (x)
+                    ;; exclude directory
+                    (unless (eq (car (file-attributes x)) t)
+                      (expand-file-name x dir)))
+                  files))))))
 
 (defmethod slideview--next-buffer ((context slideview-directory-context) reverse-p)
   (let* ((files (oref context files))
@@ -478,7 +478,7 @@ That arg is CONTEXT."
     (define-key map " " 'slideview-next-file)
     (define-key map "\d" 'slideview-prev-file)
     (define-key map "\C-c\C-i" 'slideview-concat-next-if-image)
-    (define-key map "\C-c\C-p" 'slideview-concat-prev-if-image)
+    (define-key map "\C-c\e\C-i" 'slideview-concat-prev-if-image)
 
     (setq slideview-mode-map map)))
 
