@@ -1,10 +1,10 @@
 ;;; slideview.el --- File slideshow
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
-;; URL: https://github.com/mhayashi1120/Emacs-slideview/raw/master/slideview.el
+;; URL: https://github.com/mhayashi1120/Emacs-slideview
 ;; Keywords: files
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.7.1
+;; Version: 0.7.3
 ;; Package-Requires: ((cl-lib "0.3"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -394,6 +394,7 @@ That arg is CONTEXT."
 ;;
 
 (defvar archive-file-list-start)
+(defvar archive-file-list-end)
 (defvar archive-superior-buffer)
 (defvar archive-files)
 (defvar archive-subfile-mode)
@@ -420,8 +421,10 @@ That arg is CONTEXT."
          desc)
      (goto-char archive-file-list-start)
      (catch 'done
-       (while (setq desc (archive-get-descr t))
-         (when (string= (aref desc 0) file)
+       (while (< (point) archive-file-list-end)
+         (setq desc (archive-get-descr t))
+         (when (and desc
+                    (string= (aref desc 0) file))
            (archive-view)
            (throw 'done (current-buffer)))
          (archive-next-line 1))
@@ -438,6 +441,7 @@ That arg is CONTEXT."
     (oset context paths
           (slideview-sort-items
            (cl-loop for f across archive-files
+                    if f
                     collect (aref f 0))))))
 
 (defmethod slideview--next-buffer ((context slideview-archive-context) reverse-p)
