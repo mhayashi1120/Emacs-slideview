@@ -4,7 +4,7 @@
 ;; URL: https://github.com/mhayashi1120/Emacs-slideview
 ;; Keywords: files
 ;; Emacs: GNU Emacs 22 or later
-;; Version: 0.7.3
+;; Version: 0.8.0
 ;; Package-Requires: ((cl-lib "0.3"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -43,7 +43,7 @@
 ;;   Move backward slideview
 
 ;; * `C-c C-i` / `C-c C-M-i` (Work only in `image-mode')
-;;   Concat current image with next/previous image.
+;;   Concatenate current image with next/previous image.
 ;;   To indicate the viewing file direction, please use
 ;;   `slideview-modify-setting' or `slideview-add-matched-file'
 
@@ -168,6 +168,20 @@ That arg is CONTEXT."
                        max-item s)
               finally return max-item))))
 
+(defun slideview-plist-get (context prop)
+  "Get PROP from current slideview context.
+This context is kept during slideview is working"
+  (let ((plist (oref context plist)))
+    (plist-get plist prop)))
+
+(defun slideview-plist-put (context prop val)
+  "Put VAL to PROP as a property current slideview context.
+This context is kept during slideview is working"
+  (let ((plist (oref context plist)))
+    (setq plist (plist-put plist prop val))
+    (oset context plist plist)
+    plist))
+
 (defclass slideview-context ()
   ((buffers :type list
             :initform nil)
@@ -175,7 +189,9 @@ That arg is CONTEXT."
    (direction :type symbol
               :initform 'right)
    (margin :type number
-           :initform 0))
+           :initform 0)
+   (plist :type list
+          :initform '()))
   :abstract t)
 
 (defvar slideview--context nil)
@@ -285,6 +301,46 @@ That arg is CONTEXT."
 (defun slideview--view-file (file)
   (view-file file)
   (current-buffer))
+
+;;
+;; for dired files (This context is manually switched from `slideview-directory-context')
+;;
+
+(defclass slideview-dired-context (slideview-context)
+  (
+   (files :type list)
+   )
+  "Slideshow context for a listing on dired."
+  )
+
+(defun slideview-dired-files (dir)
+  (let ((dired-buffer (dired-noselect dir)))
+    (with-current-buffer dired-buffer
+      (delq nil
+            (mapcar
+             (lambda (x)
+               ;; exclude directory
+               (unless (eq (car (file-attributes x)) t)
+                 (expand-file-name x dir)))
+             (dired-get-marked-files))))))
+
+(defmethod initialize-instance ((this slideview-dired-context) &rest fields)
+  (call-next-method)
+  (oset this base-file default-directory)
+  (slideview--load-context this))
+
+(defmethod slideview--load-context ((context slideview-dired-context))
+  (let* ((dir (oref context base-file))
+         (files (slideview-dired-files dir)))
+    (oset context files files)))
+
+(defmethod slideview--next-buffer ((context slideview-dired-context) reverse-p)
+  (let* ((files (oref context files))
+         (file buffer-file-name)
+         (next (slideview--next-item file files reverse-p)))
+    (when next
+      (save-window-excursion
+        (slideview--view-file next)))))
 
 ;;
 ;; arcbase
@@ -424,13 +480,21 @@ That arg is CONTEXT."
        (while (< (point) archive-file-list-end)
          (setq desc (archive-get-descr t))
          (when (and desc
-                    (string= (aref desc 0) file))
+                    (string= (slideview--path-in-archive desc) file))
            (archive-view)
            (throw 'done (current-buffer)))
          (archive-next-line 1))
        ;; not found. restore the previous point
        (goto-char first)
        (error "%s not found" file)))))
+
+(defun slideview--path-in-archive (desc)
+  (cl-case (type-of desc)
+    ('archive--file-desc
+     ;; TODO
+     (aref desc 1))
+    ('vector
+     (aref desc 0))))
 
 (defmethod initialize-instance ((this slideview-archive-context) &rest fields)
   (call-next-method)
@@ -442,12 +506,12 @@ That arg is CONTEXT."
           (slideview-sort-items
            (cl-loop for f across archive-files
                     if f
-                    collect (aref f 0))))))
+                    collect (slideview--path-in-archive f))))))
 
 (defmethod slideview--next-buffer ((context slideview-archive-context) reverse-p)
   (let* ((superior (slideview--find-superior-buffer context))
          (path (and archive-subfile-mode
-                    (aref archive-subfile-mode 0)))
+                    (slideview--path-in-archive archive-subfile-mode)))
          (paths (oref context paths))
          (next (and path (slideview--next-item path paths reverse-p))))
     (when next
@@ -463,7 +527,7 @@ That arg is CONTEXT."
    (and archive-subfile-mode
         buffer-file-name
         (let ((file buffer-file-name)
-              (archive-path (aref archive-subfile-mode 0)))
+              (archive-path (aref archive-subfile-mode 1)))
           (when (string-match (concat (regexp-quote archive-path) "$") file)
             (let ((archive (substring file 0 (1- (match-beginning 0)))))
               (or (get-file-buffer archive)
@@ -483,6 +547,7 @@ That arg is CONTEXT."
     (define-key map "\d" 'slideview-prev-file)
     (define-key map "\C-c\C-i" 'slideview-concat-next-if-image)
     (define-key map "\C-c\e\C-i" 'slideview-concat-prev-if-image)
+    (define-key map "\C-c\C-s" 'slideview-switch-directory-context)
 
     (setq slideview-mode-map map)))
 
@@ -629,6 +694,20 @@ See `slideview-modify-setting' more information.
 ;;
 ;; Commands
 ;;
+
+(defun slideview-switch-directory-context ()
+  "TODO now testing"
+  (interactive)
+  (let ((context-class (eieio-object-class slideview--context)))
+    (cond
+     ((eq context-class slideview-directory-context)
+      (setq slideview--context
+            (make-instance slideview-dired-context)))
+     ((eq context-class slideview-dired-context)
+      (setq slideview--context
+            (make-instance slideview-directory-context)))
+     (t
+      (error "Not a valid context. %s" context-class)))))
 
 (defun slideview-next-file ()
   "View next file (have same extension, sorted by string order)"
