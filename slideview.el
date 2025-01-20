@@ -1,4 +1,4 @@
-;;; slideview.el --- File slideshow
+;;; slideview.el --- File slideshow -*- lexical-binding: t -*-
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; URL: https://github.com/mhayashi1120/Emacs-slideview
