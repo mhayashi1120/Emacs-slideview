@@ -272,12 +272,12 @@ This context is kept during slideview is working"
   "Slideshow context for a regular file."
   )
 
-(defmethod initialize-instance ((this slideview-directory-context) &rest fields)
-  (call-next-method)
+(cl-defmethod initialize-instance ((this slideview-directory-context) &rest fields)
+  (cl-call-next-method)
   (oset this base-file default-directory)
   (slideview--load-context this))
 
-(defmethod slideview--load-context ((context slideview-directory-context))
+(cl-defmethod slideview--load-context ((context slideview-directory-context))
   (let* ((dir (oref context base-file))
          (files (directory-files dir nil "^\\(?:[^.]\\|\\.\\(?:[^.]\\|\\..\\)\\)")))
     (oset context files
@@ -290,7 +290,7 @@ This context is kept during slideview is working"
                       (expand-file-name x dir)))
                   files))))))
 
-(defmethod slideview--next-buffer ((context slideview-directory-context) reverse-p)
+(cl-defmethod slideview--next-buffer ((context slideview-directory-context) reverse-p)
   (let* ((files (oref context files))
          (file buffer-file-name)
          (next (slideview--next-item file files reverse-p)))
@@ -324,17 +324,17 @@ This context is kept during slideview is working"
                  (expand-file-name x dir)))
              (dired-get-marked-files))))))
 
-(defmethod initialize-instance ((this slideview-dired-context) &rest fields)
-  (call-next-method)
+(cl-defmethod initialize-instance ((this slideview-dired-context) &rest fields)
+  (cl-call-next-method)
   (oset this base-file default-directory)
   (slideview--load-context this))
 
-(defmethod slideview--load-context ((context slideview-dired-context))
+(cl-defmethod slideview--load-context ((context slideview-dired-context))
   (let* ((dir (oref context base-file))
          (files (slideview-dired-files dir)))
     (oset context files files)))
 
-(defmethod slideview--next-buffer ((context slideview-dired-context) reverse-p)
+(cl-defmethod slideview--next-buffer ((context slideview-dired-context) reverse-p)
   (let* ((files (oref context files))
          (file buffer-file-name)
          (next (slideview--next-item file files reverse-p)))
@@ -352,14 +352,14 @@ This context is kept during slideview is working"
    )
   "TODO")
 
-(defmethod initialize-instance ((this slideview-arcbase-context) &rest fields)
-  (call-next-method)
+(cl-defmethod initialize-instance ((this slideview-arcbase-context) &rest fields)
+  (cl-call-next-method)
   (let* ((superior (slideview--superior-buffer this))
          (file (buffer-file-name superior)))
     (oset this superior-buffer superior)
     (oset this base-file file)))
 
-(defmethod slideview--find-superior-buffer ((context slideview-arcbase-context))
+(cl-defmethod slideview--find-superior-buffer ((context slideview-arcbase-context))
   (or (let ((buffer (oref context superior-buffer)))
         (and (buffer-live-p buffer)
              buffer))
@@ -408,17 +408,17 @@ This context is kept during slideview is working"
        (goto-char first)
        (error "%s not found" file)))))
 
-(defmethod initialize-instance ((this slideview-tar-context) &rest fields)
-  (call-next-method)
+(cl-defmethod initialize-instance ((this slideview-tar-context) &rest fields)
+  (cl-call-next-method)
   (slideview--load-context this))
 
-(defmethod slideview--load-context ((context slideview-tar-context))
+(cl-defmethod slideview--load-context ((context slideview-tar-context))
   (with-current-buffer (slideview--find-superior-buffer context)
     (oset context paths
           (slideview-sort-items
            (mapcar 'tar-header-name tar-parse-info)))))
 
-(defmethod slideview--next-buffer ((context slideview-tar-context) reverse-p)
+(cl-defmethod slideview--next-buffer ((context slideview-tar-context) reverse-p)
   (let* ((superior (slideview--find-superior-buffer context))
          (path (and superior tar-superior-descriptor
                     (tar-header-name tar-superior-descriptor)))
@@ -429,7 +429,7 @@ This context is kept during slideview is working"
         (save-window-excursion
           (slideview--tar-view-file next))))))
 
-(defmethod slideview--superior-buffer ((context slideview-tar-context))
+(cl-defmethod slideview--superior-buffer ((context slideview-tar-context))
   (or
    (and (bufferp tar-superior-buffer)
         (buffer-live-p tar-superior-buffer)
@@ -496,11 +496,11 @@ This context is kept during slideview is working"
     ('vector
      (aref desc 0))))
 
-(defmethod initialize-instance ((this slideview-archive-context) &rest fields)
-  (call-next-method)
+(cl-defmethod initialize-instance ((this slideview-archive-context) &rest fields)
+  (cl-call-next-method)
   (slideview--load-context this))
 
-(defmethod slideview--load-context ((context slideview-archive-context))
+(cl-defmethod slideview--load-context ((context slideview-archive-context))
   (with-current-buffer (slideview--find-superior-buffer context)
     (oset context paths
           (slideview-sort-items
@@ -508,7 +508,7 @@ This context is kept during slideview is working"
                     if f
                     collect (slideview--path-in-archive f))))))
 
-(defmethod slideview--next-buffer ((context slideview-archive-context) reverse-p)
+(cl-defmethod slideview--next-buffer ((context slideview-archive-context) reverse-p)
   (let* ((superior (slideview--find-superior-buffer context))
          (path (and archive-subfile-mode
                     (slideview--path-in-archive archive-subfile-mode)))
@@ -519,7 +519,7 @@ This context is kept during slideview is working"
         (save-window-excursion
           (slideview--archive-view-file next))))))
 
-(defmethod slideview--superior-buffer ((context slideview-archive-context))
+(cl-defmethod slideview--superior-buffer ((context slideview-archive-context))
   (or
    (and (bufferp archive-superior-buffer)
         (buffer-live-p archive-superior-buffer)
