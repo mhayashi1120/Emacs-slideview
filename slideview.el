@@ -313,6 +313,8 @@ This context is kept during slideview is working"
   "Slideshow context for a listing on dired."
   )
 
+(declare-function dired-get-marked-files "dired")
+
 (defun slideview-dired-files (dir)
   (let ((dired-buffer (dired-noselect dir)))
     (with-current-buffer dired-buffer
@@ -700,10 +702,10 @@ See `slideview-modify-setting' more information.
   (interactive)
   (let ((context-class (eieio-object-class slideview--context)))
     (cond
-     ((eq context-class slideview-directory-context)
+     ((eq context-class 'slideview-directory-context)
       (setq slideview--context
             (make-instance 'slideview-dired-context)))
-     ((eq context-class slideview-dired-context)
+     ((eq context-class 'slideview-dired-context)
       (setq slideview--context
             (make-instance 'slideview-directory-context)))
      (t
@@ -805,7 +807,7 @@ See `slideview-modify-setting' about this settings.
        (setq interval (read-number "Interval: ")))
      (list interval)))
   (setq slideview--slideshow-timer
-        (run-with-timer slideview-slideshow-interval nil
+        (run-with-timer (or interval slideview-slideshow-interval) nil
                         (slideview--slideshow-next (current-buffer)))))
 
 (provide 'slideview)
