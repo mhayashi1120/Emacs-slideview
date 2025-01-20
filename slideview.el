@@ -490,10 +490,10 @@ This context is kept during slideview is working"
 
 (defun slideview--path-in-archive (desc)
   (cl-case (type-of desc)
-    ('archive--file-desc
+    ((archive--file-desc)
      ;; TODO
      (aref desc 1))
-    ('vector
+    ((vector)
      (aref desc 0))))
 
 (cl-defmethod initialize-instance ((this slideview-archive-context) &rest fields)
