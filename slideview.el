@@ -3,9 +3,9 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; URL: https://github.com/mhayashi1120/Emacs-slideview
 ;; Keywords: files
-;; Emacs: GNU Emacs 22 or later
+;; Emacs: GNU Emacs 25.1 or later
 ;; Version: 0.8.0
-;; Package-Requires: ((cl-lib "0.3"))
+;; Package-Requires: ((emacs "25.1"))
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -272,7 +272,7 @@ This context is kept during slideview is working"
   "Slideshow context for a regular file."
   )
 
-(cl-defmethod initialize-instance ((this slideview-directory-context) &rest fields)
+(cl-defmethod initialize-instance ((this slideview-directory-context) &rest _fields)
   (cl-call-next-method)
   (oset this base-file default-directory)
   (slideview--load-context this))
@@ -324,7 +324,7 @@ This context is kept during slideview is working"
                  (expand-file-name x dir)))
              (dired-get-marked-files))))))
 
-(cl-defmethod initialize-instance ((this slideview-dired-context) &rest fields)
+(cl-defmethod initialize-instance ((this slideview-dired-context) &rest _fields)
   (cl-call-next-method)
   (oset this base-file default-directory)
   (slideview--load-context this))
@@ -352,7 +352,7 @@ This context is kept during slideview is working"
    )
   "TODO")
 
-(cl-defmethod initialize-instance ((this slideview-arcbase-context) &rest fields)
+(cl-defmethod initialize-instance ((this slideview-arcbase-context) &rest _fields)
   (cl-call-next-method)
   (let* ((superior (slideview--superior-buffer this))
          (file (buffer-file-name superior)))
@@ -408,7 +408,7 @@ This context is kept during slideview is working"
        (goto-char first)
        (error "%s not found" file)))))
 
-(cl-defmethod initialize-instance ((this slideview-tar-context) &rest fields)
+(cl-defmethod initialize-instance ((this slideview-tar-context) &rest _fields)
   (cl-call-next-method)
   (slideview--load-context this))
 
@@ -429,7 +429,7 @@ This context is kept during slideview is working"
         (save-window-excursion
           (slideview--tar-view-file next))))))
 
-(cl-defmethod slideview--superior-buffer ((context slideview-tar-context))
+(cl-defmethod slideview--superior-buffer ((_context slideview-tar-context))
   (or
    (and (bufferp tar-superior-buffer)
         (buffer-live-p tar-superior-buffer)
@@ -496,7 +496,7 @@ This context is kept during slideview is working"
     ((vector)
      (aref desc 0))))
 
-(cl-defmethod initialize-instance ((this slideview-archive-context) &rest fields)
+(cl-defmethod initialize-instance ((this slideview-archive-context) &rest _fields)
   (cl-call-next-method)
   (slideview--load-context this))
 
@@ -519,7 +519,7 @@ This context is kept during slideview is working"
         (save-window-excursion
           (slideview--archive-view-file next))))))
 
-(cl-defmethod slideview--superior-buffer ((context slideview-archive-context))
+(cl-defmethod slideview--superior-buffer ((_context slideview-archive-context))
   (or
    (and (bufferp archive-superior-buffer)
         (buffer-live-p archive-superior-buffer)
@@ -571,17 +571,17 @@ This context is kept during slideview is working"
   (let* ((ctx (cond
                ((and (boundp 'archive-subfile-mode)
                      archive-subfile-mode)
-                (make-instance slideview-archive-context))
+                (make-instance 'slideview-archive-context))
                ((and (boundp 'tar-buffer)
                      ;; FIXME tar-buffer is `let' bind local-variable
                      ;;   defined at `tar-extract'
                      tar-buffer)
-                (make-instance slideview-tar-context))
+                (make-instance 'slideview-tar-context))
                ;;TODO
                ;; ((derived-mode-p 'doc-view-mode)
                ;;  (make-instance slideview-pdf-context))
                (t
-                (make-instance slideview-directory-context))))
+                (make-instance 'slideview-directory-context))))
          (setting (slideview-get-setting (oref ctx base-file))))
     (cond
      ((not setting))
@@ -702,10 +702,10 @@ See `slideview-modify-setting' more information.
     (cond
      ((eq context-class slideview-directory-context)
       (setq slideview--context
-            (make-instance slideview-dired-context)))
+            (make-instance 'slideview-dired-context)))
      ((eq context-class slideview-dired-context)
       (setq slideview--context
-            (make-instance slideview-directory-context)))
+            (make-instance 'slideview-directory-context)))
      (t
       (error "Not a valid context. %s" context-class)))))
 

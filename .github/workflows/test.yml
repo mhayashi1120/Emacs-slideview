@@ -26,8 +26,6 @@ jobs:
           - snapshot
         include:
           - os: ubuntu-latest
-            emacs_version: 24.5
-          - os: ubuntu-latest
             emacs_version: 25.3
           - os: ubuntu-latest
             emacs_version: 26.3
