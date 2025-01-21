@@ -68,6 +68,10 @@
   "Sequential viewing files."
   :group 'applications)
 
+;;
+;; Customize Variables
+;;
+
 (defcustom slideview-slideshow-interval 5.0
   "*Interval seconds to next file when slideshow is activated."
   :group 'slideview
@@ -92,6 +96,26 @@
   "Number of count prefetching slideshow files."
   :group 'slideview
   :type 'integer)
+
+;;
+;; Class
+;;
+
+(defclass slideview-context ()
+  ((buffers :type list
+            :initform nil)
+   (base-file :type string)
+   (direction :type symbol
+              :initform 'right)
+   (margin :type number
+           :initform 0)
+   (plist :type list
+          :initform '()))
+  :abstract t)
+
+;;
+;; Internal
+;;
 
 (defun slideview--prefetch-background (buffer context &optional count)
   "FUNC must receive one arg and return next buffer.
@@ -181,18 +205,6 @@ This context is kept during slideview is working"
     (setq plist (plist-put plist prop val))
     (oset context plist plist)
     plist))
-
-(defclass slideview-context ()
-  ((buffers :type list
-            :initform nil)
-   (base-file :type string)
-   (direction :type symbol
-              :initform 'right)
-   (margin :type number
-           :initform 0)
-   (plist :type list
-          :initform '()))
-  :abstract t)
 
 (defvar slideview--context nil)
 (make-variable-buffer-local 'slideview--context)
