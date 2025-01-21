@@ -279,10 +279,8 @@ This context is kept during slideview is working"
 
 (defclass slideview-directory-context (slideview-context)
   (
-   (files :type list)
-   )
-  "Slideshow context for a regular file."
-  )
+   (files :type list))
+  "Slideshow context for a regular file.")
 
 (cl-defmethod initialize-instance ((this slideview-directory-context) &rest _fields)
   (cl-call-next-method)
@@ -320,10 +318,8 @@ This context is kept during slideview is working"
 
 (defclass slideview-dired-context (slideview-context)
   (
-   (files :type list)
-   )
-  "Slideshow context for a listing on dired."
-  )
+   (files :type list))
+  "Slideshow context for a listing on dired.")
 
 (declare-function dired-get-marked-files "dired")
 
@@ -362,8 +358,7 @@ This context is kept during slideview is working"
 
 (defclass slideview-arcbase-context (slideview-context)
   (
-   (superior-buffer :type buffer)
-   )
+   (superior-buffer :type buffer))
   "TODO")
 
 (cl-defmethod initialize-instance ((this slideview-arcbase-context) &rest _fields)
@@ -397,10 +392,8 @@ This context is kept during slideview is working"
 
 (defclass slideview-tar-context (slideview-arcbase-context)
   (
-   (paths :type list)
-   )
-  "Slideshow context for `tar-mode'"
-  )
+   (paths :type list))
+  "Slideshow context for `tar-mode'")
 
 (defun slideview--tar-view-file (file)
   (or
@@ -475,10 +468,8 @@ This context is kept during slideview is working"
 
 (defclass slideview-archive-context (slideview-arcbase-context)
   (
-   (paths :type list)
-   )
-  "Slideshow context for `archive-mode'"
-  )
+   (paths :type list))
+  "Slideshow context for `archive-mode'")
 
 (defun slideview--archive-view-file (file)
   (or
@@ -559,9 +550,9 @@ This context is kept during slideview is working"
 
     (define-key map " " 'slideview-next-file)
     (define-key map "\d" 'slideview-prev-file)
-    (define-key map "\C-c\C-i" 'slideview-concat-next-if-image)
-    (define-key map "\C-c\e\C-i" 'slideview-concat-prev-if-image)
-    (define-key map "\C-c\C-s" 'slideview-switch-directory-context)
+    (define-key map "\C-c.\C-i" 'slideview-concat-next-if-image)
+    (define-key map "\C-c.\ei" 'slideview-concat-prev-if-image)
+    (define-key map "\C-c.s" 'slideview-switch-directory-context)
 
     (setq slideview-mode-map map)))
 
